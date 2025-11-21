@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   DocumentArrowUpIcon,
   ClipboardDocumentListIcon,
@@ -8,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const NurseDashboard = () => {
+  const navigate = useNavigate()
   const [recentUploads] = useState([
     { id: 1, type: 'vitals', patient: 'John Anderson', file: 'vitals_2024-11-21.csv', time: '30 minutes ago' },
     { id: 2, type: 'lab', patient: 'Maria Garcia', file: 'lab_results_blood.pdf', time: '1 hour ago' },
@@ -31,11 +33,17 @@ const NurseDashboard = () => {
             <p className="text-gray-600 mt-1">Manage patient vitals, lab results, and medication tracking</p>
           </div>
           <div className="flex space-x-3">
-            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+            <button 
+              onClick={() => navigate('/nurse/vitals')}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+            >
               <DocumentArrowUpIcon className="h-4 w-4 mr-2" />
               Upload Vitals
             </button>
-            <button className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
+            <button 
+              onClick={() => navigate('/nurse/labs')}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+            >
               <ClipboardDocumentListIcon className="h-4 w-4 mr-2" />
               Add Lab Results
             </button>
@@ -119,7 +127,10 @@ const NurseDashboard = () => {
             
             {/* Upload Areas */}
             <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 cursor-pointer transition-colors">
+              <div 
+                onClick={() => navigate('/nurse/vitals')}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 cursor-pointer transition-colors"
+              >
                 <DocumentArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
                 <div className="mt-2">
                   <p className="text-sm font-medium text-gray-900">Upload Patient Vitals</p>
@@ -127,7 +138,10 @@ const NurseDashboard = () => {
                 </div>
               </div>
 
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-500 cursor-pointer transition-colors">
+              <div 
+                onClick={() => navigate('/nurse/labs')}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-500 cursor-pointer transition-colors"
+              >
                 <ClipboardDocumentListIcon className="mx-auto h-12 w-12 text-gray-400" />
                 <div className="mt-2">
                   <p className="text-sm font-medium text-gray-900">Upload Lab Results</p>
@@ -135,7 +149,10 @@ const NurseDashboard = () => {
                 </div>
               </div>
 
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 cursor-pointer transition-colors">
+              <div 
+                onClick={() => navigate('/nurse/medications')}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 cursor-pointer transition-colors"
+              >
                 <HeartIcon className="mx-auto h-12 w-12 text-gray-400" />
                 <div className="mt-2">
                   <p className="text-sm font-medium text-gray-900">Medication Updates</p>
@@ -210,7 +227,10 @@ const NurseDashboard = () => {
       <div className="bg-white shadow rounded-lg p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button 
+            onClick={() => navigate('/nurse/vitals')}
+            className="p-4 text-left rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
             <div className="flex items-center">
               <CloudArrowUpIcon className="h-6 w-6 text-blue-500 mr-3" />
               <div>
@@ -220,7 +240,10 @@ const NurseDashboard = () => {
             </div>
           </button>
           
-          <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button 
+            onClick={() => navigate('/nurse/vitals')}
+            className="p-4 text-left rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
             <div className="flex items-center">
               <HeartIcon className="h-6 w-6 text-red-500 mr-3" />
               <div>
@@ -230,7 +253,10 @@ const NurseDashboard = () => {
             </div>
           </button>
           
-          <button className="p-4 text-left rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button 
+            onClick={() => navigate('/nurse/labs')}
+            className="p-4 text-left rounded-lg border border-gray-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
             <div className="flex items-center">
               <ClipboardDocumentListIcon className="h-6 w-6 text-green-500 mr-3" />
               <div>

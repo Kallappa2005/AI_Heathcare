@@ -10,7 +10,9 @@ import {
   XCircleIcon,
   BeakerIcon,
   CalendarIcon,
-  BellAlertIcon
+  BellAlertIcon,
+  CloudArrowUpIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -20,6 +22,8 @@ const MedicationLog = () => {
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showMedicationForm, setShowMedicationForm] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
   const [activeTab, setActiveTab] = useState('schedule')
   
   const [medicationForm, setMedicationForm] = useState({
@@ -228,6 +232,23 @@ const MedicationLog = () => {
     })
   }
 
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0])
+  }
+
+  const handleFileUpload = (e) => {
+    e.preventDefault()
+    if (!selectedFile) {
+      alert('Please select a file to upload')
+      return
+    }
+    console.log('Uploading medication file:', selectedFile.name)
+    // TODO: Implement actual file upload API call
+    alert(`Medication log "${selectedFile.name}" uploaded successfully!`)
+    setShowUploadModal(false)
+    setSelectedFile(null)
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
     console.log('Recording medication administration:', medicationForm)
@@ -285,6 +306,13 @@ const MedicationLog = () => {
           </div>
           <div className="flex space-x-3">
             <Button
+              variant="primary"
+              onClick={() => setShowUploadModal(true)}
+            >
+              <CloudArrowUpIcon className="h-4 w-4 mr-2" />
+              Upload File
+            </Button>
+            <Button
               variant={activeTab === 'schedule' ? 'primary' : 'secondary'}
               onClick={() => setActiveTab('schedule')}
             >
@@ -307,6 +335,107 @@ const MedicationLog = () => {
           </div>
         </div>
       </div>
+
+      {/* File Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Upload Medication Log File</h2>
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false)
+                    setSelectedFile(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleFileUpload} className="p-6">
+              <div className="space-y-4">
+                <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
+                  <div className="flex items-start">
+                    <BeakerIcon className="h-5 w-5 text-purple-600 mt-0.5" />
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-purple-900">Upload Instructions</h3>
+                      <div className="mt-2 text-sm text-purple-700">
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>Upload CSV file with medication administration records</li>
+                          <li>Required columns: patientId, medicationName, dosage, route, time</li>
+                          <li>Optional columns: givenBy, notes, sideEffects</li>
+                          <li>Maximum file size: 10MB</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Medication Log File
+                  </label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <CloudArrowUpIcon className="h-10 w-10 text-gray-400 mb-3" />
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">CSV files only (MAX. 10MB)</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  {selectedFile && (
+                    <div className="mt-3 flex items-center p-3 bg-green-50 border border-green-200 rounded-md">
+                      <DocumentTextIcon className="h-5 w-5 mr-3 text-green-600" />
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-900">{selectedFile.name}</span>
+                        <span className="ml-2 text-sm text-gray-500">({(selectedFile.size / 1024).toFixed(2)} KB)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Note:</strong> All medication records will be validated before import. Records with missing required fields will be flagged for review.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowUploadModal(false)
+                    setSelectedFile(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!selectedFile}
+                >
+                  <CloudArrowUpIcon className="h-4 w-4 mr-2" />
+                  Upload and Process
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'schedule' && (
         <div className="space-y-4">

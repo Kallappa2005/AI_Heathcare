@@ -19,6 +19,8 @@ const LabReports = () => {
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showReportForm, setShowReportForm] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [selectedFile, setSelectedFile] = useState(null)
   const [activeTab, setActiveTab] = useState('upload')
   
   const [reportForm, setReportForm] = useState({
@@ -181,6 +183,23 @@ const LabReports = () => {
     })
   }
 
+  const handleFileChange = (e) => {
+    setSelectedFile(e.target.files[0])
+  }
+
+  const handleFileUpload = (e) => {
+    e.preventDefault()
+    if (!selectedFile) {
+      alert('Please select a file to upload')
+      return
+    }
+    console.log('Uploading lab file:', selectedFile.name)
+    // TODO: Implement actual file upload API call
+    alert(`Lab report "${selectedFile.name}" uploaded successfully!`)
+    setShowUploadModal(false)
+    setSelectedFile(null)
+  }
+
   const addTestResult = () => {
     setReportForm({
       ...reportForm,
@@ -269,22 +288,141 @@ const LabReports = () => {
           </div>
           <div className="flex space-x-3">
             <Button
+              variant="primary"
+              onClick={() => setShowUploadModal(true)}
+            >
+              <CloudArrowUpIcon className="h-4 w-4 mr-2" />
+              Upload File
+            </Button>
+            <Button
               variant={activeTab === 'upload' ? 'primary' : 'secondary'}
               onClick={() => setActiveTab('upload')}
             >
-              <CloudArrowUpIcon className="h-4 w-4 mr-2" />
-              Upload Results
+              <DocumentTextIcon className="h-4 w-4 mr-2" />
+              Manual Entry
             </Button>
             <Button
               variant={activeTab === 'reports' ? 'primary' : 'secondary'}
               onClick={() => setActiveTab('reports')}
             >
-              <DocumentTextIcon className="h-4 w-4 mr-2" />
+              <BeakerIcon className="h-4 w-4 mr-2" />
               View Reports
             </Button>
           </div>
         </div>
       </div>
+
+      {/* File Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Upload Lab Report File</h2>
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false)
+                    setSelectedFile(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleFileUpload} className="p-6">
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex items-start">
+                    <BeakerIcon className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-blue-900">Supported File Types</h3>
+                      <div className="mt-2 text-sm text-blue-700">
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>PDF reports from laboratory systems</li>
+                          <li>CSV files with test results</li>
+                          <li>Images of lab result printouts (JPG, PNG)</li>
+                          <li>Maximum file size: 25MB</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Lab Report File
+                  </label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <CloudArrowUpIcon className="h-10 w-10 text-gray-400 mb-3" />
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">PDF, CSV, JPG, or PNG (MAX. 25MB)</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".pdf,.csv,.jpg,.jpeg,.png"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  {selectedFile && (
+                    <div className="mt-3 flex items-center p-3 bg-green-50 border border-green-200 rounded-md">
+                      <DocumentTextIcon className="h-5 w-5 mr-3 text-green-600" />
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-900">{selectedFile.name}</span>
+                        <span className="ml-2 text-sm text-gray-500">({(selectedFile.size / 1024).toFixed(2)} KB)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Patient ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter patient ID if known"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Note:</strong> Files will be processed and results will be extracted automatically. Manual verification may be required.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setShowUploadModal(false)
+                    setSelectedFile(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!selectedFile}
+                >
+                  <CloudArrowUpIcon className="h-4 w-4 mr-2" />
+                  Upload Report
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'upload' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
