@@ -11,6 +11,9 @@ import AIInsights from './pages/doctor/AIInsights'
 import PatientNotes from './pages/doctor/PatientNotes'
 import RiskAssessments from './pages/doctor/RiskAssessments'
 import NurseDashboard from './pages/nurse/NurseDashboard'
+import VitalsUpload from './pages/nurse/VitalsUpload'
+import LabReports from './pages/nurse/LabReports'
+import MedicationLog from './pages/nurse/MedicationLog'
 import PatientProfile from './pages/patient/PatientProfile'
 import PatientSearch from './pages/patient/PatientSearch'
 import Layout from './components/Layout'
@@ -85,6 +88,21 @@ function App() {
               <Route path="nurse" element={
                 <ProtectedRoute requiredRole="nurse">
                   <NurseDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="nurse/vitals" element={
+                <ProtectedRoute requiredRole="nurse">
+                  <VitalsUpload />
+                </ProtectedRoute>
+              } />
+              <Route path="nurse/labs" element={
+                <ProtectedRoute requiredRole="nurse">
+                  <LabReports />
+                </ProtectedRoute>
+              } />
+              <Route path="nurse/medications" element={
+                <ProtectedRoute requiredRole="nurse">
+                  <MedicationLog />
                 </ProtectedRoute>
               } />
               
