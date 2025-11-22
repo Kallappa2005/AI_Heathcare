@@ -1,6 +1,44 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MagnifyingGlassIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
+import patientService from '../../services/patientService'
+
+const DEFAULT_PATIENT = {
+  condition: 'Condition not recorded',
+  phone: 'Not provided',
+  doctor: 'Not assigned'
+}
+
+const getPatientAge = (patient) => {
+  if (patient?.age) return patient.age
+  if (!patient?.dateOfBirth) return null
+  const birthDate = new Date(patient.dateOfBirth)
+  const today = new Date()
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const monthDiff = today.getMonth() - birthDate.getMonth()
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+  return age
+}
+
+const toPatientCard = (patient) => {
+  if (!patient) return null
+  const fullName = patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 'Unnamed Patient'
+  const condition = patient.primaryDiagnosis || patient.condition || DEFAULT_PATIENT.condition
+  const riskScore = patient.riskScore ?? patient.aiRiskScore ?? 0
+  const lastVisit = patient.updatedAt || patient.lastVisit || patient.createdAt || null
+  return {
+    id: patient.id || patient.patientId,
+    name: fullName,
+    age: getPatientAge(patient) ?? 'N/A',
+    condition,
+    riskScore,
+    lastVisit,
+    phone: patient.phone || DEFAULT_PATIENT.phone,
+    doctor: patient.primaryPhysician || patient.doctor || DEFAULT_PATIENT.doctor
+  }
+}
 
 const PatientSearch = () => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -11,55 +49,99 @@ const PatientSearch = () => {
     riskLevel: '',
     lastVisit: ''
   })
+  const [patients, setPatients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [searching, setSearching] = useState(false)
+  const searchTimeoutRef = useRef(null)
 
-  const [patients] = useState([
-    { 
-      id: 1, 
-      name: 'John Anderson', 
-      age: 67, 
-      condition: 'Hypertension', 
-      riskScore: 89, 
-      lastVisit: '2024-11-19',
-      phone: '(555) 123-4567',
-      doctor: 'Dr. Smith'
-    },
-    { 
-      id: 2, 
-      name: 'Maria Garcia', 
-      age: 54, 
-      condition: 'Diabetes Type 2', 
-      riskScore: 76, 
-      lastVisit: '2024-11-14',
-      phone: '(555) 234-5678',
-      doctor: 'Dr. Johnson'
-    },
-    { 
-      id: 3, 
-      name: 'Robert Chen', 
-      age: 72, 
-      condition: 'Heart Disease', 
-      riskScore: 84, 
-      lastVisit: '2024-11-18',
-      phone: '(555) 345-6789',
-      doctor: 'Dr. Wilson'
-    },
-    { 
-      id: 4, 
-      name: 'Sarah Johnson', 
-      age: 45, 
-      condition: 'Asthma', 
-      riskScore: 32, 
-      lastVisit: '2024-11-20',
-      phone: '(555) 456-7890',
-      doctor: 'Dr. Brown'
+  const applyPatients = useCallback((list = []) => {
+    const normalized = list
+      .map(toPatientCard)
+      .filter(Boolean)
+    setPatients(normalized)
+  }, [])
+
+  const fetchAllPatients = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await patientService.getPatients()
+      applyPatients(response?.patients || response?.data?.patients || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load patients')
+      setPatients([])
+    } finally {
+      setLoading(false)
     }
-  ])
+  }, [applyPatients])
 
-  const filteredPatients = patients.filter(patient => {
-    const matchesSearch = patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         patient.condition.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesSearch
-  })
+  const runSearch = useCallback(async (query) => {
+    if (!query || query.trim().length < 3) {
+      fetchAllPatients()
+      return
+    }
+
+    setSearching(true)
+    setError(null)
+    try {
+      const response = await patientService.searchPatients(query)
+      applyPatients(response?.patients || [])
+    } catch (err) {
+      setError(err.message || 'Search failed')
+      setPatients([])
+    } finally {
+      setSearching(false)
+    }
+  }, [applyPatients, fetchAllPatients])
+
+  useEffect(() => {
+    fetchAllPatients()
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [fetchAllPatients])
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      runSearch(searchQuery)
+    }, 400)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [runSearch, searchQuery])
+
+  const filteredPatients = useMemo(() => {
+    return patients.filter((patient) => {
+      const matchesCondition = !filters.condition || patient.condition.toLowerCase().includes(filters.condition)
+      const matchesRisk = (() => {
+        if (!filters.riskLevel) return true
+        if (filters.riskLevel === 'low') return patient.riskScore < 60
+        if (filters.riskLevel === 'medium') return patient.riskScore >= 60 && patient.riskScore < 80
+        if (filters.riskLevel === 'high') return patient.riskScore >= 80
+        return true
+      })()
+      const matchesAge = (() => {
+        if (!filters.ageRange || patient.age === 'N/A') return true
+        const age = Number(patient.age)
+        if (filters.ageRange === '18-30') return age >= 18 && age <= 30
+        if (filters.ageRange === '31-50') return age >= 31 && age <= 50
+        if (filters.ageRange === '51-70') return age >= 51 && age <= 70
+        if (filters.ageRange === '70+') return age >= 70
+        return true
+      })()
+      return matchesCondition && matchesRisk && matchesAge
+    })
+  }, [filters.ageRange, filters.condition, filters.riskLevel, patients])
 
   const getRiskBadge = (score) => {
     if (score >= 80) return 'bg-red-100 text-red-800'
@@ -201,7 +283,18 @@ const PatientSearch = () => {
             <h3 className="text-lg font-medium text-gray-900">
               Search Results ({filteredPatients.length})
             </h3>
+            {(loading || searching) && (
+              <span className="text-sm text-gray-500">
+                {loading ? 'Loading patients...' : 'Searching...'}
+              </span>
+            )}
           </div>
+
+          {error && (
+            <div className="mb-4 text-sm text-red-600">
+              {error}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4">
             {filteredPatients.map((patient) => (
@@ -212,29 +305,34 @@ const PatientSearch = () => {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="h-12 w-12 bg-gray-300 rounded-full flex items-center justify-center">
+                    <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center">
                       <span className="text-lg font-medium text-gray-700">
-                        {patient.name.split(' ').map(n => n[0]).join('')}
+                        {patient.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase()}
                       </span>
                     </div>
                     <div>
                       <h4 className="text-lg font-medium text-gray-900">{patient.name}</h4>
-                      <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
                         <span>Age {patient.age}</span>
-                        <span>•</span>
+                        <span className="hidden sm:inline">•</span>
                         <span>{patient.condition}</span>
-                        <span>•</span>
+                        <span className="hidden sm:inline">•</span>
                         <span>{patient.phone}</span>
-                        <span>•</span>
+                        <span className="hidden sm:inline">•</span>
                         <span>Dr: {patient.doctor}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
                     <div className="text-right">
-                      <div className="text-sm text-gray-500">Last visit</div>
+                      <div className="text-sm text-gray-500">Last update</div>
                       <div className="text-sm font-medium text-gray-900">
-                        {new Date(patient.lastVisit).toLocaleDateString()}
+                        {patient.lastVisit ? new Date(patient.lastVisit).toLocaleDateString() : 'N/A'}
                       </div>
                     </div>
                     <div className="text-right">
@@ -249,7 +347,7 @@ const PatientSearch = () => {
             ))}
           </div>
 
-          {filteredPatients.length === 0 && (
+          {!loading && !filteredPatients.length && (
             <div className="text-center py-12">
               <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No patients found</h3>

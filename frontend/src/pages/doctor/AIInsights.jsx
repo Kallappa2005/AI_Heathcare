@@ -1,27 +1,90 @@
-import { useState } from 'react'
-import { 
-  UserIcon, 
-  BoltIcon, 
-  ExclamationTriangleIcon, 
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  UserIcon,
+  BoltIcon,
+  ExclamationTriangleIcon,
   HeartIcon,
-  ClockIcon,
   DocumentTextIcon,
   ChartBarIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
-  CalendarIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import patientService from '../../services/patientService'
+
+const parseArrayField = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) return parsed
+    } catch (error) {
+      return value.split(',').map((item) => item.trim()).filter(Boolean)
+    }
+  }
+  return []
+}
+
+const formatTimestamp = (value) => {
+  if (!value) return 'Not available'
+  try {
+    return new Date(value).toLocaleString()
+  } catch (error) {
+    return value
+  }
+}
+
+const calculateAge = (dob) => {
+  if (!dob) return null
+  const birthDate = new Date(dob)
+  const today = new Date()
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const m = today.getMonth() - birthDate.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1
+  }
+  return age
+}
+
+const buildPatientRecordList = (patients = []) => {
+  return patients.map((patient) => {
+    const fullName = patient.fullName || `${patient.firstName || ''} ${patient.lastName || ''}`.trim()
+    return {
+      patient: {
+        id: patient.id || patient.patientId || patient.medicalRecordNumber,
+        fullName: fullName || 'Unnamed Patient',
+        gender: patient.gender,
+        dateOfBirth: patient.dateOfBirth,
+        medicalRecordNumber: patient.medicalRecordNumber || patient.patientId,
+        email: patient.email,
+        phone: patient.phone
+      },
+      insight: null
+    }
+  })
+}
 
 const AIInsights = () => {
-  const [selectedPatient, setSelectedPatient] = useState(null)
+  const [patientRecords, setPatientRecords] = useState([])
+  const [patientsLoading, setPatientsLoading] = useState(true)
+  const [patientsError, setPatientsError] = useState(null)
+  const [selectedPatientId, setSelectedPatientId] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedInsights, setSelectedInsights] = useState([])
+  const [insightLoading, setInsightLoading] = useState(false)
+  const [insightError, setInsightError] = useState(null)
+  const [refreshingInsight, setRefreshingInsight] = useState(false)
   const [showCreateNoteSidebar, setShowCreateNoteSidebar] = useState(false)
   const [showRiskAssessmentSidebar, setShowRiskAssessmentSidebar] = useState(false)
-  
+
+  const insightsCacheRef = useRef({})
+  const selectedPatientIdRef = useRef(null)
+
   // Form states
   const [noteForm, setNoteForm] = useState({
     title: '',
@@ -44,77 +107,130 @@ const AIInsights = () => {
     urgencyLevel: 'routine'
   })
 
-  const [assignedPatients] = useState([
-    {
-      id: 1,
-      name: 'John Anderson',
-      age: 67,
-      condition: 'Hypertension',
-      riskScore: 89,
-      lastVisit: '2024-11-20',
-      aiSummary: 'High-risk cardiac patient with recent blood pressure elevation. AI analysis suggests medication adjustment needed.',
-      keyTerms: ['Hypertension', 'Beta-blockers', 'ECG abnormal', 'Chest pain'],
-      latestVitals: { bp: '168/95', hr: '88', temp: '98.6' },
-      insights: {
-        riskFactors: ['Elevated blood pressure trending upward', 'Family history of cardiac events', 'Age-related cardiovascular changes'],
-        recommendations: ['Consider ACE inhibitor adjustment', 'Schedule cardiology consultation', 'Monitor daily BP readings'],
-        aiReasoning: 'Risk score elevated due to systolic BP >160 for 3 consecutive visits, combined with patient age and family history. AI model confidence: 94%'
-      }
-    },
-    {
-      id: 2,
-      name: 'Sarah Johnson',
-      age: 34,
-      condition: 'Diabetes Type 2',
-      riskScore: 76,
-      lastVisit: '2024-11-19',
-      aiSummary: 'Diabetes management improving with recent HbA1c reduction. Continue current treatment protocol.',
-      keyTerms: ['Diabetes', 'Metformin', 'HbA1c', 'Glucose monitoring'],
-      latestVitals: { glucose: '142', bp: '128/82', hr: '72', temp: '98.2' },
-      insights: {
-        riskFactors: ['HbA1c trending downward but still above target', 'Occasional missed medication doses', 'Stress-related glucose spikes'],
-        recommendations: ['Continue metformin 1000mg BID', 'Referral to diabetes educator', 'Consider continuous glucose monitor'],
-        aiReasoning: 'Risk score moderate due to improved glucose control but persistent elevation. AI detects 23% improvement over 3 months.'
-      }
-    },
-    {
-      id: 3,
-      name: 'Maria Garcia',
-      age: 54,
-      condition: 'Chronic Pain',
-      riskScore: 65,
-      lastVisit: '2024-11-18',
-      aiSummary: 'Chronic lower back pain with good response to physical therapy. Pain scores declining consistently.',
-      keyTerms: ['Chronic pain', 'Physical therapy', 'Opioid reduction', 'Functional improvement'],
-      latestVitals: { pain: '4/10', bp: '132/78', hr: '74', temp: '98.4' },
-      insights: {
-        riskFactors: ['Long-term opioid use', 'Mobility limitations', 'Risk of medication dependency'],
-        recommendations: ['Continue physical therapy', 'Gradual opioid tapering', 'Consider alternative pain management'],
-        aiReasoning: 'Risk score moderate with positive trend. AI analysis shows 40% pain reduction over 6 weeks with increased activity levels.'
-      }
-    },
-    {
-      id: 4,
-      name: 'Robert Chen',
-      age: 72,
-      condition: 'COPD',
-      riskScore: 84,
-      lastVisit: '2024-11-17',
-      aiSummary: 'COPD exacerbation risk elevated. Recent spirometry shows decline in lung function.',
-      keyTerms: ['COPD', 'Spirometry', 'Bronchodilators', 'Oxygen therapy'],
-      latestVitals: { spO2: '91%', rr: '22', bp: '145/88', temp: '98.1' },
-      insights: {
-        riskFactors: ['Declining FEV1', 'Recent infection history', 'Medication adherence concerns'],
-        recommendations: ['Optimize bronchodilator therapy', 'Pulmonary rehabilitation referral', 'Home oxygen assessment'],
-        aiReasoning: 'Risk score high due to functional decline and exacerbation history. AI predicts 35% risk of hospitalization in next 30 days.'
+  const applyRecordList = useCallback((records, preserveSelection = true) => {
+    setPatientRecords(records)
+
+    if (!records.length) {
+      setSelectedPatientId(null)
+      setSelectedInsights([])
+      return
+    }
+
+    const activePatientId = preserveSelection ? selectedPatientIdRef.current : null
+    const hasActiveRecord = activePatientId && records.some((record) => record.patient?.id === activePatientId)
+
+    if (!preserveSelection || !hasActiveRecord) {
+      const firstRecord = records.find((record) => record.patient?.id)
+      const fallbackId = firstRecord?.patient?.id || null
+      setSelectedPatientId(fallbackId)
+
+      if (fallbackId) {
+        if (firstRecord?.insight) {
+          insightsCacheRef.current = {
+            ...insightsCacheRef.current,
+            [fallbackId]: [firstRecord.insight]
+          }
+          setSelectedInsights([firstRecord.insight])
+        } else {
+          setSelectedInsights(insightsCacheRef.current[fallbackId] || [])
+        }
       }
     }
-  ])
+  }, [])
 
-  const filteredPatients = assignedPatients.filter(patient =>
-    patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.condition.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const loadPatientsFallback = useCallback(async () => {
+    try {
+      const response = await patientService.getPatients()
+      const patients = response?.patients || response?.data?.patients || []
+      return buildPatientRecordList(patients)
+    } catch (error) {
+      setPatientsError((prev) => prev || error.message || 'Failed to load patients list')
+      return []
+    }
+  }, [])
+
+  const loadPatientsSummary = useCallback(async (preserveSelection = true) => {
+    setPatientsLoading(true)
+    setPatientsError(null)
+    try {
+      const response = await patientService.getPatientInsightSummary()
+      let records = response?.records || []
+
+      if (!records.length) {
+        records = await loadPatientsFallback()
+      }
+
+      applyRecordList(records, preserveSelection)
+    } catch (error) {
+      setPatientsError(error.message || 'Failed to load AI insights summary')
+      const fallbackRecords = await loadPatientsFallback()
+      applyRecordList(fallbackRecords, preserveSelection)
+    } finally {
+      setPatientsLoading(false)
+    }
+  }, [applyRecordList, loadPatientsFallback])
+
+  const loadPatientInsights = useCallback(async (patientId, { forceRefresh = false } = {}) => {
+    if (!patientId) return
+    if (!forceRefresh && insightsCacheRef.current[patientId]) {
+      setSelectedInsights(insightsCacheRef.current[patientId])
+      return
+    }
+
+    setInsightLoading(true)
+    setInsightError(null)
+    try {
+      const insights = await patientService.getPatientInsights(patientId)
+      setSelectedInsights(insights)
+      insightsCacheRef.current = {
+        ...insightsCacheRef.current,
+        [patientId]: insights
+      }
+    } catch (error) {
+      setInsightError(error.message || 'Failed to load AI insights')
+      setSelectedInsights([])
+    } finally {
+      setInsightLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    selectedPatientIdRef.current = selectedPatientId
+  }, [selectedPatientId])
+
+  useEffect(() => {
+    loadPatientsSummary()
+  }, [loadPatientsSummary])
+
+  useEffect(() => {
+    if (!selectedPatientId) return
+    loadPatientInsights(selectedPatientId)
+  }, [selectedPatientId, loadPatientInsights])
+
+  const filteredPatients = useMemo(() => {
+    if (!searchQuery) return patientRecords
+    const query = searchQuery.toLowerCase()
+    return patientRecords.filter((record) => {
+      const name = record.patient?.fullName?.toLowerCase() || ''
+      const mrn = record.patient?.medicalRecordNumber?.toLowerCase() || ''
+      const summary = record.insight?.ai_summary?.toLowerCase() || ''
+      return name.includes(query) || mrn.includes(query) || summary.includes(query)
+    })
+  }, [patientRecords, searchQuery])
+
+  const selectedRecord = patientRecords.find((record) => record.patient?.id === selectedPatientId)
+  const selectedPatientInfo = selectedRecord?.patient
+  const currentInsight = selectedInsights[0] || selectedRecord?.insight || null
+  const riskFactors = parseArrayField(currentInsight?.risk_factors || currentInsight?.riskFactors)
+  const recommendations = parseArrayField(currentInsight?.recommendations)
+  const keyTerms = parseArrayField(currentInsight?.key_terms || currentInsight?.keyTerms)
+  const latestVitals = currentInsight?.latestVitals || null
+
+  const handlePatientSelect = (record) => {
+    setSelectedPatientId(record.patient?.id || null)
+    setShowCreateNoteSidebar(false)
+    setShowRiskAssessmentSidebar(false)
+  }
 
   const handleCreateNote = () => {
     setShowCreateNoteSidebar(true)
@@ -133,7 +249,8 @@ const AIInsights = () => {
 
   const handleNoteSubmit = (e) => {
     e.preventDefault()
-    console.log('Creating note:', { patient: selectedPatient.name, ...noteForm })
+    if (!selectedPatientInfo) return
+    console.log('Creating note:', { patient: selectedPatientInfo.fullName, ...noteForm })
     alert('Note created successfully!')
     setNoteForm({
       title: '',
@@ -148,7 +265,8 @@ const AIInsights = () => {
 
   const handleRiskSubmit = (e) => {
     e.preventDefault()
-    console.log('Creating risk assessment:', { patient: selectedPatient.name, ...riskForm })
+    if (!selectedPatientInfo) return
+    console.log('Creating risk assessment:', { patient: selectedPatientInfo.fullName, ...riskForm })
     alert('Risk assessment created successfully!')
     setRiskForm({
       assessmentType: 'comprehensive',
@@ -170,6 +288,24 @@ const AIInsights = () => {
     return 'success'
   }
 
+  const handleRefreshInsights = async () => {
+    if (!selectedPatientId) return
+    setRefreshingInsight(true)
+    setInsightError(null)
+    try {
+      await patientService.refreshPatientInsight(selectedPatientId)
+      const cacheCopy = { ...insightsCacheRef.current }
+      delete cacheCopy[selectedPatientId]
+      insightsCacheRef.current = cacheCopy
+      await loadPatientInsights(selectedPatientId, { forceRefresh: true })
+      await loadPatientsSummary()
+    } catch (error) {
+      setInsightError(error.message || 'Failed to refresh AI insight')
+    } finally {
+      setRefreshingInsight(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -186,7 +322,7 @@ const AIInsights = () => {
             <Card.Header>
               <Card.Title className="flex items-center">
                 <UserIcon className="h-5 w-5 mr-2" />
-                Your Patients ({assignedPatients.length})
+                Your Patients ({patientRecords.length})
               </Card.Title>
               <div className="mt-2">
                 <div className="relative">
@@ -203,29 +339,47 @@ const AIInsights = () => {
             </Card.Header>
             <Card.Content className="p-0">
               <div className="space-y-1">
-                {filteredPatients.map((patient) => (
-                  <div
-                    key={patient.id}
-                    onClick={() => setSelectedPatient(patient)}
-                    className={`p-4 cursor-pointer border-b border-gray-100 transition-colors ${
-                      selectedPatient?.id === patient.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{patient.name}</h3>
-                        <p className="text-sm text-gray-600">{patient.condition}</p>
-                        <p className="text-xs text-gray-500">Last visit: {patient.lastVisit}</p>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant={getRiskColor(patient.riskScore)}>
-                          Risk: {patient.riskScore}
-                        </Badge>
-                        <div className="text-xs text-gray-500 mt-1">Age {patient.age}</div>
+                {patientsLoading && (
+                  <div className="p-4 text-sm text-gray-500">Loading patients...</div>
+                )}
+                {patientsError && (
+                  <div className="p-4 text-sm text-red-600">{patientsError}</div>
+                )}
+                {!patientsLoading && !filteredPatients.length && (
+                  <div className="p-4 text-sm text-gray-500">No patients match your search.</div>
+                )}
+                {filteredPatients.map((record) => {
+                  const patient = record.patient
+                  const insight = record.insight
+                  const age = calculateAge(patient?.dateOfBirth)
+                  return (
+                    <div
+                      key={patient?.id || record.insight?.id}
+                      onClick={() => handlePatientSelect(record)}
+                      className={`p-4 cursor-pointer border-b border-gray-100 transition-colors ${
+                        selectedPatientId === patient?.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-gray-900">{patient?.fullName || 'Unnamed Patient'}</h3>
+                          <p className="text-sm text-gray-600">MRN: {patient?.medicalRecordNumber || 'N/A'}</p>
+                          {insight?.created_at && (
+                            <p className="text-xs text-gray-500">Updated {formatTimestamp(insight.created_at)}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <Badge variant={getRiskColor(insight?.risk_score || 0)}>
+                            Risk: {insight?.risk_score ?? 'NA'}
+                          </Badge>
+                          {age && (
+                            <div className="text-xs text-gray-500 mt-1">Age {age}</div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </Card.Content>
           </Card>
@@ -233,58 +387,90 @@ const AIInsights = () => {
 
         {/* AI Analysis Panel */}
         <div className={`transition-all duration-300 ${(showCreateNoteSidebar || showRiskAssessmentSidebar) ? 'lg:col-span-1' : 'lg:col-span-2'}`}>
-          {selectedPatient ? (
+          {selectedPatientInfo ? (
             <>
               <Card className="mb-6">
                 <Card.Header>
                   <Card.Title className="flex items-center justify-between">
                     <div className="flex items-center">
                       <BoltIcon className="h-5 w-5 mr-2 text-yellow-500" />
-                      AI Analysis - {selectedPatient.name}
+                      AI Analysis - {selectedPatientInfo.fullName || 'Patient'}
                     </div>
-                    <Badge variant={getRiskColor(selectedPatient.riskScore)}>
-                      Risk Score: {selectedPatient.riskScore}
-                    </Badge>
+                    <div className="flex items-center space-x-3">
+                      <Badge variant={getRiskColor(currentInsight?.risk_score || 0)}>
+                        Risk Score: {currentInsight?.risk_score ?? 'NA'}
+                      </Badge>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={refreshingInsight}
+                        onClick={handleRefreshInsights}
+                        className="flex items-center"
+                      >
+                        <ArrowPathIcon className={`h-4 w-4 mr-1 ${refreshingInsight ? 'animate-spin' : ''}`} />
+                        {refreshingInsight ? 'Refreshing' : 'Refresh'}
+                      </Button>
+                    </div>
                   </Card.Title>
                 </Card.Header>
                 <Card.Content>
                   <div className="space-y-4">
-                    {/* AI Summary */}
-                    <div>
-                      <h3 className="font-medium text-gray-900 mb-2">AI Summary</h3>
-                      <p className="text-gray-700 text-sm leading-relaxed">{selectedPatient.aiSummary}</p>
-                      <div className="mt-2 text-xs text-gray-500">
-                        {selectedPatient.insights.aiReasoning}
-                      </div>
-                    </div>
-
-                    {/* Key Medical Terms */}
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2">Key Medical Terms Extracted</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedPatient.keyTerms.map((term, index) => (
-                          <Badge key={index} variant="secondary">
-                            {term}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Latest Vitals */}
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                        <HeartIcon className="h-4 w-4 mr-1 text-red-500" />
-                        Latest Vitals & Metrics
-                      </h4>
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {Object.entries(selectedPatient.latestVitals).map(([key, value]) => (
-                          <div key={key} className="text-center">
-                            <div className="text-lg font-semibold text-gray-900">{value}</div>
-                            <div className="text-xs text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1')}</div>
+                    {insightLoading && (
+                      <div className="text-sm text-gray-500">Loading clinical insight...</div>
+                    )}
+                    {insightError && (
+                      <div className="text-sm text-red-600">{insightError}</div>
+                    )}
+                    {currentInsight && (
+                      <>
+                        <div>
+                          <h3 className="font-medium text-gray-900 mb-2">AI Summary</h3>
+                          <p className="text-gray-700 text-sm leading-relaxed">{currentInsight.ai_summary || 'No summary available.'}</p>
+                          <div className="mt-2 text-xs text-gray-500 space-y-1">
+                            <p>Model version: {currentInsight.model_version || 'ocr-v1'}</p>
+                            <p>Confidence: {(currentInsight.confidence_score ?? 0).toFixed(2)}</p>
+                            <p>Generated: {formatTimestamp(currentInsight.created_at)}</p>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium text-gray-900 mb-2">Key Medical Terms Extracted</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {keyTerms.length ? (
+                              keyTerms.map((term, index) => (
+                                <Badge key={index} variant="secondary">
+                                  {term}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-sm text-gray-500">No highlighted terms</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                            <HeartIcon className="h-4 w-4 mr-1 text-red-500" />
+                            Latest Vitals & Metrics
+                          </h4>
+                          {latestVitals ? (
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                              {Object.entries(latestVitals).map(([key, value]) => (
+                                <div key={key} className="text-center">
+                                  <div className="text-lg font-semibold text-gray-900">{String(value)}</div>
+                                  <div className="text-xs text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1')}</div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500">No vitals were attached to this insight.</p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {!currentInsight && !insightLoading && (
+                      <p className="text-sm text-gray-500">No AI insight has been generated for this patient yet.</p>
+                    )}
                   </div>
                 </Card.Content>
               </Card>
@@ -297,37 +483,49 @@ const AIInsights = () => {
                   </Card.Title>
                 </Card.Header>
                 <Card.Content>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                        <ExclamationTriangleIcon className="h-4 w-4 mr-1 text-red-500" />
-                        Risk Factors Identified
-                      </h4>
-                      <ul className="space-y-1">
-                        {selectedPatient.insights.riskFactors.map((factor, index) => (
-                          <li key={index} className="text-sm text-gray-700 flex items-start">
-                            <span className="inline-block w-2 h-2 bg-red-400 rounded-full mt-2 mr-2 shrink-0"></span>
-                            {factor}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                  {currentInsight ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                          <ExclamationTriangleIcon className="h-4 w-4 mr-1 text-red-500" />
+                          Risk Factors Identified
+                        </h4>
+                        <ul className="space-y-1">
+                          {riskFactors.length ? (
+                            riskFactors.map((factor, index) => (
+                              <li key={index} className="text-sm text-gray-700 flex items-start">
+                                <span className="inline-block w-2 h-2 bg-red-400 rounded-full mt-2 mr-2 shrink-0"></span>
+                                {factor}
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-sm text-gray-500">No elevated risk factors recorded.</li>
+                          )}
+                        </ul>
+                      </div>
 
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                        <DocumentTextIcon className="h-4 w-4 mr-1 text-blue-500" />
-                        AI Recommendations
-                      </h4>
-                      <ul className="space-y-1">
-                        {selectedPatient.insights.recommendations.map((rec, index) => (
-                          <li key={index} className="text-sm text-gray-700 flex items-start">
-                            <span className="inline-block w-2 h-2 bg-blue-400 rounded-full mt-2 mr-2 shrink-0"></span>
-                            {rec}
-                          </li>
-                        ))}
-                      </ul>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                          <DocumentTextIcon className="h-4 w-4 mr-1 text-blue-500" />
+                          AI Recommendations
+                        </h4>
+                        <ul className="space-y-1">
+                          {recommendations.length ? (
+                            recommendations.map((rec, index) => (
+                              <li key={index} className="text-sm text-gray-700 flex items-start">
+                                <span className="inline-block w-2 h-2 bg-blue-400 rounded-full mt-2 mr-2 shrink-0"></span>
+                                {rec}
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-sm text-gray-500">No specific recommendations were produced.</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Select a patient to view AI-driven risk factors and recommendations.</p>
+                  )}
                 </Card.Content>
               </Card>
 
@@ -387,7 +585,7 @@ const AIInsights = () => {
                     </label>
                     <input
                       type="text"
-                      value={selectedPatient?.name || ''}
+                      value={selectedPatientInfo?.fullName || ''}
                       disabled
                       className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
                     />
@@ -467,7 +665,7 @@ const AIInsights = () => {
                     </label>
                     <input
                       type="text"
-                      value={selectedPatient?.name || ''}
+                      value={selectedPatientInfo?.fullName || ''}
                       disabled
                       className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
                     />
