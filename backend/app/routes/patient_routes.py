@@ -2,12 +2,14 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.patient_service import PatientService
+from app.services.ai_insight_service import AIInsightsService
 
 # Create blueprint
 patient_bp = Blueprint('patients', __name__)
 
 # Initialize service
 patient_service = PatientService()
+ai_insights_service = AIInsightsService()
 
 @patient_bp.route('/register', methods=['POST'])
 @jwt_required()
@@ -236,6 +238,65 @@ def validate_patient_id(patient_id):
         return jsonify({
             'success': False,
             'error': f'Patient ID validation failed: {str(e)}'
+        }), 500
+
+@patient_bp.route('/<patient_id>/insights', methods=['GET'])
+@jwt_required()
+def get_patient_ai_insights(patient_id):
+    """Fetch recent AI insights for a patient"""
+    try:
+        limit = request.args.get('limit', 5, type=int)
+        success, message, insights = ai_insights_service.get_patient_insights(patient_id, limit)
+        status_code = 200 if success else 500
+        return jsonify({
+            'success': success,
+            'message': message,
+            'insights': insights,
+            'count': len(insights)
+        }), status_code
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to fetch AI insights: {str(e)}'
+        }), 500
+
+@patient_bp.route('/<patient_id>/insights/refresh', methods=['POST'])
+@jwt_required()
+def refresh_patient_ai_insights(patient_id):
+    """Trigger OCR + AI analysis for the latest patient PDF"""
+    try:
+        current_user_id = get_jwt_identity()
+        success, message, insight = ai_insights_service.generate_patient_insight(patient_id, current_user_id)
+        status_code = 201 if success else 400
+        return jsonify({
+            'success': success,
+            'message': message,
+            'insight': insight
+        }), status_code
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to refresh AI insight: {str(e)}'
+        }), 500
+
+@patient_bp.route('/insights/summary', methods=['GET'])
+@jwt_required()
+def list_latest_ai_insights():
+    """Return the most recent AI insight per patient"""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        success, message, records = ai_insights_service.list_latest_insights(limit)
+        status_code = 200 if success else 500
+        return jsonify({
+            'success': success,
+            'message': message,
+            'records': records,
+            'count': len(records)
+        }), status_code
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to list AI insights: {str(e)}'
         }), 500
 
 # Health check for patient routes

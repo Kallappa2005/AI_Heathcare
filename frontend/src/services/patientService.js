@@ -67,12 +67,30 @@ export const patientService = {
   },
 
   // Get AI insights for patient
-  async getPatientInsights(id) {
+  async getPatientInsights(id, params = {}) {
     try {
-      const response = await api.get(`/patients/${id}/insights`)
+      const response = await api.get(`/patients/${id}/insights`, { params })
+      return response.data?.insights || []
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to fetch insights')
+    }
+  },
+
+  async getPatientInsightSummary(limit = 100) {
+    try {
+      const response = await api.get('/patients/insights/summary', { params: { limit } })
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch insights')
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to fetch AI insights summary')
+    }
+  },
+
+  async refreshPatientInsight(id) {
+    try {
+      const response = await api.post(`/patients/${id}/insights/refresh`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to refresh AI insight')
     }
   },
 
