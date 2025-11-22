@@ -1,6 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import Login from './pages/auth/Login'
+import AdminLogin from './pages/auth/AdminLogin'
+import DoctorLogin from './pages/auth/DoctorLogin'
+import NurseLogin from './pages/auth/NurseLogin'
+import Signup from './pages/auth/Signup'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import PatientRegistration from './pages/admin/PatientRegistration'
 import StaffManagement from './pages/admin/StaffManagement'
@@ -28,6 +32,10 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/doctor/login" element={<DoctorLogin />} />
+            <Route path="/nurse/login" element={<NurseLogin />} />
+            <Route path="/signup" element={<Signup />} />
             
             {/* Protected Routes */}
             <Route path="/" element={

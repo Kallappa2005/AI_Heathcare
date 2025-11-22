@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   DocumentTextIcon, 
   BeakerIcon, 
@@ -14,6 +14,7 @@ import {
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import vitalsService from '../../services/vitalsService'
 
 const LabReports = () => {
   const [selectedPatient, setSelectedPatient] = useState(null)
@@ -22,6 +23,9 @@ const LabReports = () => {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [activeTab, setActiveTab] = useState('upload')
+  const [patients, setPatients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   
   const [reportForm, setReportForm] = useState({
     patientId: '',
@@ -37,40 +41,31 @@ const LabReports = () => {
     attachments: []
   })
 
-  const [patients] = useState([
-    { 
-      id: 'P001', 
-      name: 'John Anderson', 
-      age: 67, 
-      room: '101A',
-      condition: 'Hypertension',
-      pendingLabs: 3
-    },
-    { 
-      id: 'P002', 
-      name: 'Sarah Johnson', 
-      age: 34, 
-      room: '102B',
-      condition: 'Diabetes Type 2',
-      pendingLabs: 1
-    },
-    { 
-      id: 'P003', 
-      name: 'Maria Garcia', 
-      age: 54, 
-      room: '103A',
-      condition: 'Post-surgery',
-      pendingLabs: 2
-    },
-    { 
-      id: 'P004', 
-      name: 'Robert Chen', 
-      age: 72, 
-      room: '104B',
-      condition: 'COPD',
-      pendingLabs: 0
+  // Load patients data on component mount
+  useEffect(() => {
+    loadPatientsData()
+  }, [])
+
+  const loadPatientsData = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      
+      const response = await vitalsService.getAllPatients()
+      
+      if (response.success && response.patients) {
+        setPatients(response.patients)
+      } else {
+        setError('Failed to load patients data')
+        console.error('Failed to load patients:', response)
+      }
+    } catch (error) {
+      console.error('Error loading patients:', error)
+      setError('Failed to load patients. Please try again.')
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
   const [labTests] = useState([
     {
@@ -155,7 +150,9 @@ const LabReports = () => {
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.id.toLowerCase().includes(searchQuery.toLowerCase())
+    patient.patient_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    patient.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    patient.room?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const handleInputChange = (e) => {
@@ -448,29 +445,59 @@ const LabReports = () => {
                 </div>
               </Card.Header>
               <Card.Content className="p-0">
-                <div className="space-y-1 max-h-96 overflow-y-auto">
-                  {filteredPatients.map((patient) => (
-                    <div
-                      key={patient.id}
-                      onClick={() => handlePatientSelect(patient)}
-                      className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors"
+                {error && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-md m-4">
+                    <div className="text-sm text-red-600">{error}</div>
+                    <Button
+                      size="sm"
+                      onClick={loadPatientsData}
+                      className="mt-2"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-medium text-gray-900">{patient.name}</h3>
-                          <p className="text-sm text-gray-600">ID: {patient.id} • Room: {patient.room}</p>
-                          <p className="text-xs text-gray-500">{patient.condition}</p>
-                        </div>
-                        <div className="text-right">
-                          {patient.pendingLabs > 0 && (
-                            <Badge variant="warning">
-                              {patient.pendingLabs} pending
+                      Try Again
+                    </Button>
+                  </div>
+                )}
+                <div className="space-y-1 max-h-96 overflow-y-auto">
+                  {loading ? (
+                    <div className="p-4 text-center text-gray-500">
+                      Loading patients...
+                    </div>
+                  ) : filteredPatients.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      {searchQuery ? 'No patients found matching your search' : 'No patients found'}
+                    </div>
+                  ) : (
+                    filteredPatients.map((patient) => (
+                      <div
+                        key={patient.id}
+                        onClick={() => handlePatientSelect(patient)}
+                        className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="font-medium text-gray-900">{patient.name}</h3>
+                            <p className="text-sm text-gray-600">
+                              ID: {patient.patient_id || patient.id} • Room: {patient.room || 'N/A'}
+                            </p>
+                            <p className="text-xs text-gray-500">{patient.condition || 'No diagnosis'}</p>
+                            {patient.phone && (
+                              <p className="text-xs text-gray-400">Phone: {patient.phone}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <Badge variant={patient.age > 65 ? 'warning' : 'success'}>
+                              Age {patient.age || 'N/A'}
                             </Badge>
-                          )}
+                            {patient.emergency_contact && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Emergency: {patient.emergency_contact}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </Card.Content>
             </Card>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import authService from '../services/authService'
 
 const AuthContext = createContext()
 
@@ -30,45 +31,38 @@ export const AuthProvider = ({ children }) => {
     setLoading(false)
   }, [])
 
-  const login = async (email, password) => {
+  const login = async (email, password, expectedRole = null) => {
     try {
-      // Mock authentication based on email patterns
-      let mockUser = null
+      const response = await authService.login({ email, password })
+      const { user: userData, token } = response
       
-      if (email.includes('admin')) {
-        mockUser = {
-          id: 1,
-          name: 'Dr. Admin',
-          email: email,
-          role: 'admin'
-        }
-      } else if (email.includes('doctor')) {
-        mockUser = {
-          id: 2,
-          name: 'Dr. Smith',
-          email: email,
-          role: 'doctor'
-        }
-      } else if (email.includes('nurse')) {
-        mockUser = {
-          id: 3,
-          name: 'Nurse Johnson',
-          email: email,
-          role: 'nurse'
-        }
-      } else {
-        throw new Error('Invalid credentials')
+      // Validate role if specified
+      if (expectedRole && userData.role !== expectedRole) {
+        throw new Error(`Access denied. ${expectedRole.charAt(0).toUpperCase() + expectedRole.slice(1)} privileges required.`)
       }
-
-      const mockToken = 'mock-jwt-token-' + Date.now()
       
-      localStorage.setItem('token', mockToken)
-      localStorage.setItem('user', JSON.stringify(mockUser))
-      setUser(mockUser)
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(userData))
+      setUser(userData)
       
-      return { success: true, user: mockUser }
+      return { success: true, user: userData }
     } catch (error) {
       throw new Error('Login failed: ' + error.message)
+    }
+  }
+
+  const signup = async (userData) => {
+    try {
+      const response = await authService.register(userData)
+      const { user: newUser, token } = response
+      
+      localStorage.setItem('token', token)
+      localStorage.setItem('user', JSON.stringify(newUser))
+      setUser(newUser)
+      
+      return { success: true, user: newUser, message: 'Account created successfully!' }
+    } catch (error) {
+      throw new Error('Registration failed: ' + error.message)
     }
   }
 
@@ -78,10 +72,19 @@ export const AuthProvider = ({ children }) => {
     setUser(null)
   }
 
+  // Role-specific login methods
+  const loginAsAdmin = (email, password) => login(email, password, 'admin')
+  const loginAsDoctor = (email, password) => login(email, password, 'doctor')
+  const loginAsNurse = (email, password) => login(email, password, 'nurse')
+
   const value = {
     user,
     login,
+    signup,
     logout,
+    loginAsAdmin,
+    loginAsDoctor,
+    loginAsNurse,
     loading,
     isAuthenticated: !!user
   }

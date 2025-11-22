@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   HeartIcon, 
   FireIcon, 
@@ -12,104 +12,65 @@ import {
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import vitalsService from '../../services/vitalsService'
 
 const VitalsUpload = () => {
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showUploadForm, setShowUploadForm] = useState(false)
+  const [patients, setPatients] = useState([])
+  const [recentVitals, setRecentVitals] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
   
   const [vitalsForm, setVitalsForm] = useState({
-    patientId: '',
-    heartRate: '',
-    systolic: '',
-    diastolic: '',
+    patient_id: '',
+    heart_rate: '',
+    blood_pressure_systolic: '',
+    blood_pressure_diastolic: '',
     temperature: '',
-    oxygenSaturation: '',
-    respiration: '',
-    recordedTime: new Date().toISOString().slice(0, 16),
+    oxygen_saturation: '',
+    respiratory_rate: '',
+    recorded_at: new Date().toISOString().slice(0, 16),
     notes: ''
   })
 
-  const [patients] = useState([
-    { 
-      id: 'P001', 
-      name: 'John Anderson', 
-      age: 67, 
-      room: '101A',
-      condition: 'Hypertension',
-      lastVitals: '2024-11-21 08:00',
-      alertLevel: 'high'
-    },
-    { 
-      id: 'P002', 
-      name: 'Sarah Johnson', 
-      age: 34, 
-      room: '102B',
-      condition: 'Diabetes Type 2',
-      lastVitals: '2024-11-21 06:30',
-      alertLevel: 'normal'
-    },
-    { 
-      id: 'P003', 
-      name: 'Maria Garcia', 
-      age: 54, 
-      room: '103A',
-      condition: 'Post-surgery',
-      lastVitals: '2024-11-21 07:15',
-      alertLevel: 'normal'
-    },
-    { 
-      id: 'P004', 
-      name: 'Robert Chen', 
-      age: 72, 
-      room: '104B',
-      condition: 'COPD',
-      lastVitals: '2024-11-20 22:45',
-      alertLevel: 'warning'
-    }
-  ])
+  // Load initial data
+  useEffect(() => {
+    loadInitialData()
+  }, [])
 
-  const [recentVitals] = useState([
-    {
-      id: 1,
-      patientId: 'P001',
-      patientName: 'John Anderson',
-      heartRate: 88,
-      bloodPressure: '168/95',
-      temperature: 98.6,
-      oxygenSaturation: 96,
-      respiration: 18,
-      recordedTime: '2024-11-21 08:00',
-      recordedBy: 'Nurse Johnson',
-      status: 'abnormal'
-    },
-    {
-      id: 2,
-      patientId: 'P002',
-      patientName: 'Sarah Johnson',
-      heartRate: 72,
-      bloodPressure: '128/82',
-      temperature: 98.2,
-      oxygenSaturation: 98,
-      respiration: 16,
-      recordedTime: '2024-11-21 06:30',
-      recordedBy: 'Nurse Johnson',
-      status: 'normal'
-    },
-    {
-      id: 3,
-      patientId: 'P003',
-      patientName: 'Maria Garcia',
-      heartRate: 68,
-      bloodPressure: '118/76',
-      temperature: 98.4,
-      oxygenSaturation: 99,
-      respiration: 14,
-      recordedTime: '2024-11-21 07:15',
-      recordedBy: 'Nurse Johnson',
-      status: 'normal'
+  const loadInitialData = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      
+      // Load patients and recent vitals in parallel
+      const [patientsResult, vitalsResult] = await Promise.all([
+        vitalsService.getAllPatients(),
+        vitalsService.getRecentVitals(10)
+      ])
+      
+      if (patientsResult.success) {
+        setPatients(patientsResult.patients || [])
+      } else {
+        console.error('Failed to load patients:', patientsResult.error)
+      }
+      
+      if (vitalsResult.success) {
+        setRecentVitals(vitalsResult.vitals || [])
+      } else {
+        console.error('Failed to load recent vitals:', vitalsResult.error)
+      }
+      
+    } catch (error) {
+      console.error('Error loading initial data:', error)
+      setError('Failed to load data. Please refresh the page.')
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
   const vitalsTemplates = [
     { name: 'Normal Adult', hr: '72', sys: '120', dia: '80', temp: '98.6', spo2: '98', resp: '16' },
@@ -119,8 +80,9 @@ const VitalsUpload = () => {
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.room.toLowerCase().includes(searchQuery.toLowerCase())
+    patient.patient_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    patient.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    patient.room?.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const handleInputChange = (e) => {
@@ -134,7 +96,7 @@ const VitalsUpload = () => {
     setSelectedPatient(patient)
     setVitalsForm({
       ...vitalsForm,
-      patientId: patient.id
+      patient_id: patient.id
     })
     setShowUploadForm(true)
   }
@@ -142,45 +104,73 @@ const VitalsUpload = () => {
   const handleTemplateApply = (template) => {
     setVitalsForm({
       ...vitalsForm,
-      heartRate: template.hr,
-      systolic: template.sys,
-      diastolic: template.dia,
+      heart_rate: template.hr,
+      blood_pressure_systolic: template.sys,
+      blood_pressure_diastolic: template.dia,
       temperature: template.temp,
-      oxygenSaturation: template.spo2,
-      respiration: template.resp
+      oxygen_saturation: template.spo2,
+      respiratory_rate: template.resp
     })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Submitting vitals:', vitalsForm)
-    alert('Vitals uploaded successfully!')
-    setShowUploadForm(false)
-    setVitalsForm({
-      patientId: '',
-      heartRate: '',
-      systolic: '',
-      diastolic: '',
-      temperature: '',
-      oxygenSaturation: '',
-      respiration: '',
-      recordedTime: new Date().toISOString().slice(0, 16),
-      notes: ''
-    })
-    setSelectedPatient(null)
-  }
-
-  const getAlertColor = (level) => {
-    switch (level) {
-      case 'high': return 'danger'
-      case 'warning': return 'warning'
-      case 'normal': return 'success'
-      default: return 'secondary'
+    
+    try {
+      setSubmitting(true)
+      setError('')
+      
+      // Validate form data
+      const validation = vitalsService.validateVitalSigns(vitalsForm)
+      if (!validation.isValid) {
+        const errorMessages = Object.values(validation.errors).join(', ')
+        setError(errorMessages)
+        return
+      }
+      
+      // Submit vitals
+      const result = await vitalsService.uploadVitals(vitalsForm)
+      
+      if (result.success) {
+        // Clear form and close modal
+        setVitalsForm({
+          patient_id: '',
+          heart_rate: '',
+          blood_pressure_systolic: '',
+          blood_pressure_diastolic: '',
+          temperature: '',
+          oxygen_saturation: '',
+          respiratory_rate: '',
+          recorded_at: new Date().toISOString().slice(0, 16),
+          notes: ''
+        })
+        setSelectedPatient(null)
+        setShowUploadForm(false)
+        setError('')
+        
+        // Reload recent vitals
+        loadInitialData()
+        
+        alert('Vitals uploaded successfully!')
+      } else {
+        setError(result.error || 'Failed to upload vitals')
+      }
+      
+    } catch (error) {
+      console.error('Submit vitals error:', error)
+      setError('Failed to submit vitals. Please try again.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  const getStatusColor = (status) => {
-    return status === 'abnormal' ? 'danger' : 'success'
+  const getVitalStatusColor = (status) => {
+    switch (status) {
+      case 'normal': return 'success'
+      case 'abnormal': return 'warning'
+      case 'critical': return 'danger'
+      default: return 'secondary'
+    }
   }
 
   return (
@@ -226,29 +216,41 @@ const VitalsUpload = () => {
             </Card.Header>
             <Card.Content className="p-0">
               <div className="space-y-1 max-h-96 overflow-y-auto">
-                {filteredPatients.map((patient) => (
-                  <div
-                    key={patient.id}
-                    onClick={() => handlePatientSelect(patient)}
-                    className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{patient.name}</h3>
-                        <p className="text-sm text-gray-600">ID: {patient.id} • Room: {patient.room}</p>
-                        <p className="text-xs text-gray-500">{patient.condition}</p>
-                      </div>
-                      <div className="text-right">
-                        <Badge variant={getAlertColor(patient.alertLevel)}>
-                          {patient.alertLevel}
-                        </Badge>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Last: {patient.lastVitals}
-                        </p>
+                {loading ? (
+                  <div className="p-4 text-center text-gray-500">
+                    Loading patients...
+                  </div>
+                ) : filteredPatients.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No patients found
+                  </div>
+                ) : (
+                  filteredPatients.map((patient) => (
+                    <div
+                      key={patient.id}
+                      onClick={() => handlePatientSelect(patient)}
+                      className="p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-medium text-gray-900">{patient.name}</h3>
+                          <p className="text-sm text-gray-600">
+                            ID: {patient.patient_id || patient.id} • Room: {patient.room || 'N/A'}
+                          </p>
+                          <p className="text-xs text-gray-500">{patient.condition || 'No diagnosis'}</p>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant={patient.age > 65 ? 'warning' : 'success'}>
+                            Age {patient.age || 'N/A'}
+                          </Badge>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Last: {patient.lastVitals || 'No recent vitals'}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </Card.Content>
           </Card>
@@ -265,41 +267,69 @@ const VitalsUpload = () => {
             </Card.Header>
             <Card.Content>
               <div className="space-y-3">
-                {recentVitals.map((vital) => (
-                  <div key={vital.id} className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-900">{vital.patientName}</h4>
-                      <Badge variant={getStatusColor(vital.status)}>
-                        {vital.status}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <span className="text-gray-500">HR:</span>
-                        <span className="ml-1 font-medium">{vital.heartRate}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">BP:</span>
-                        <span className="ml-1 font-medium">{vital.bloodPressure}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Temp:</span>
-                        <span className="ml-1 font-medium">{vital.temperature}°F</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">SpO2:</span>
-                        <span className="ml-1 font-medium">{vital.oxygenSaturation}%</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">RR:</span>
-                        <span className="ml-1 font-medium">{vital.respiration}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 text-xs">{vital.recordedTime}</span>
-                      </div>
-                    </div>
+                {loading ? (
+                  <div className="text-center text-gray-500">
+                    Loading recent vitals...
                   </div>
-                ))}
+                ) : recentVitals.length === 0 ? (
+                  <div className="text-center text-gray-500">
+                    No recent vitals found
+                  </div>
+                ) : (
+                  recentVitals.map((vital) => (
+                    <div key={vital.id} className="bg-gray-50 p-3 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-gray-900">{vital.patient_name}</h4>
+                        <Badge variant={getVitalStatusColor(vitalsService.getVitalStatus({
+                          heart_rate: vital.heart_rate,
+                          blood_pressure_systolic: vital.blood_pressure_systolic,
+                          blood_pressure_diastolic: vital.blood_pressure_diastolic,
+                          temperature: vital.temperature,
+                          respiratory_rate: vital.respiratory_rate,
+                          oxygen_saturation: vital.oxygen_saturation
+                        }))}>
+                          {vitalsService.getVitalStatus({
+                            heart_rate: vital.heart_rate,
+                            blood_pressure_systolic: vital.blood_pressure_systolic,
+                            blood_pressure_diastolic: vital.blood_pressure_diastolic,
+                            temperature: vital.temperature,
+                            respiratory_rate: vital.respiratory_rate,
+                            oxygen_saturation: vital.oxygen_saturation
+                          })}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-500">HR:</span>
+                          <span className="ml-1 font-medium">{vital.heart_rate}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">BP:</span>
+                          <span className="ml-1 font-medium">
+                            {vital.blood_pressure_systolic}/{vital.blood_pressure_diastolic}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Temp:</span>
+                          <span className="ml-1 font-medium">{vital.temperature}°F</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">SpO2:</span>
+                          <span className="ml-1 font-medium">{vital.oxygen_saturation}%</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">RR:</span>
+                          <span className="ml-1 font-medium">{vital.respiratory_rate}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs">
+                            {vital.recorded_at ? new Date(vital.recorded_at).toLocaleString() : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </Card.Content>
           </Card>
@@ -338,12 +368,13 @@ const VitalsUpload = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Patient ID</label>
                     <input
                       type="text"
-                      name="patientId"
-                      value={vitalsForm.patientId}
+                      name="patient_id"
+                      value={vitalsForm.patient_id}
                       onChange={handleInputChange}
                       required
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter patient ID"
+                      placeholder="Select patient from the list"
+                      readOnly
                     />
                   </div>
 
@@ -351,8 +382,8 @@ const VitalsUpload = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Recording Time</label>
                     <input
                       type="datetime-local"
-                      name="recordedTime"
-                      value={vitalsForm.recordedTime}
+                      name="recorded_at"
+                      value={vitalsForm.recorded_at}
                       onChange={handleInputChange}
                       required
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -387,8 +418,8 @@ const VitalsUpload = () => {
                       </label>
                       <input
                         type="number"
-                        name="heartRate"
-                        value={vitalsForm.heartRate}
+                        name="heart_rate"
+                        value={vitalsForm.heart_rate}
                         onChange={handleInputChange}
                         required
                         min="30"
@@ -426,8 +457,8 @@ const VitalsUpload = () => {
                       </label>
                       <input
                         type="number"
-                        name="systolic"
-                        value={vitalsForm.systolic}
+                        name="blood_pressure_systolic"
+                        value={vitalsForm.blood_pressure_systolic}
                         onChange={handleInputChange}
                         required
                         min="60"
@@ -443,8 +474,8 @@ const VitalsUpload = () => {
                       </label>
                       <input
                         type="number"
-                        name="diastolic"
-                        value={vitalsForm.diastolic}
+                        name="blood_pressure_diastolic"
+                        value={vitalsForm.blood_pressure_diastolic}
                         onChange={handleInputChange}
                         required
                         min="40"
@@ -462,12 +493,13 @@ const VitalsUpload = () => {
                       </label>
                       <input
                         type="number"
-                        name="oxygenSaturation"
-                        value={vitalsForm.oxygenSaturation}
+                        name="oxygen_saturation"
+                        value={vitalsForm.oxygen_saturation}
                         onChange={handleInputChange}
                         required
                         min="70"
                         max="100"
+                        step="0.1"
                         className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="98"
                       />
@@ -480,8 +512,8 @@ const VitalsUpload = () => {
                       </label>
                       <input
                         type="number"
-                        name="respiration"
-                        value={vitalsForm.respiration}
+                        name="respiratory_rate"
+                        value={vitalsForm.respiratory_rate}
                         onChange={handleInputChange}
                         required
                         min="8"
@@ -504,6 +536,13 @@ const VitalsUpload = () => {
                       placeholder="Additional observations or notes..."
                     />
                   </div>
+
+                  {/* Error display */}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                      <div className="text-sm text-red-600">{error}</div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -515,13 +554,19 @@ const VitalsUpload = () => {
                   onClick={() => {
                     setShowUploadForm(false)
                     setSelectedPatient(null)
+                    setError('')
                   }}
+                  disabled={submitting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="inline-flex items-center">
+                <Button 
+                  type="submit" 
+                  className="inline-flex items-center"
+                  disabled={submitting}
+                >
                   <CheckCircleIcon className="h-4 w-4 mr-2" />
-                  Upload Vitals
+                  {submitting ? 'Uploading...' : 'Upload Vitals'}
                 </Button>
               </div>
             </form>

@@ -7,7 +7,10 @@ import {
   ClockIcon,
   DocumentTextIcon,
   ChartBarIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  CalendarIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -16,7 +19,31 @@ import Badge from '../../components/ui/Badge'
 const AIInsights = () => {
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showCreateNoteSidebar, setShowCreateNoteSidebar] = useState(false)
+  const [showRiskAssessmentSidebar, setShowRiskAssessmentSidebar] = useState(false)
   
+  // Form states
+  const [noteForm, setNoteForm] = useState({
+    title: '',
+    type: 'progress',
+    content: '',
+    priority: 'normal',
+    tags: [],
+    followUpDate: ''
+  })
+  
+  const [riskForm, setRiskForm] = useState({
+    assessmentType: 'comprehensive',
+    riskFactors: [],
+    currentMedications: '',
+    symptoms: '',
+    vitalsConcerns: '',
+    labResults: '',
+    recommendations: '',
+    followUpPlan: '',
+    urgencyLevel: 'routine'
+  })
+
   const [assignedPatients] = useState([
     {
       id: 1,
@@ -58,12 +85,12 @@ const AIInsights = () => {
       riskScore: 65,
       lastVisit: '2024-11-18',
       aiSummary: 'Chronic lower back pain with good response to physical therapy. Pain scores declining consistently.',
-      keyTerms: ['Chronic pain', 'Physical therapy', 'NSAIDs', 'MRI normal'],
-      latestVitals: { painScore: '4/10', bp: '118/76', hr: '68', temp: '98.4' },
+      keyTerms: ['Chronic pain', 'Physical therapy', 'Opioid reduction', 'Functional improvement'],
+      latestVitals: { pain: '4/10', bp: '132/78', hr: '74', temp: '98.4' },
       insights: {
-        riskFactors: ['Chronic pain affecting daily activities', 'Long-term NSAID use concerns', 'Mild depression symptoms'],
-        recommendations: ['Continue PT 3x weekly', 'Gradual NSAID reduction', 'Consider pain psychology referral'],
-        aiReasoning: 'Risk score declining due to improved pain management and functional capacity. Patient compliance excellent.'
+        riskFactors: ['Long-term opioid use', 'Mobility limitations', 'Risk of medication dependency'],
+        recommendations: ['Continue physical therapy', 'Gradual opioid tapering', 'Consider alternative pain management'],
+        aiReasoning: 'Risk score moderate with positive trend. AI analysis shows 40% pain reduction over 6 weeks with increased activity levels.'
       }
     },
     {
@@ -74,20 +101,68 @@ const AIInsights = () => {
       riskScore: 84,
       lastVisit: '2024-11-17',
       aiSummary: 'COPD exacerbation risk elevated. Recent spirometry shows decline in lung function.',
-      keyTerms: ['COPD', 'Bronchodilators', 'Spirometry', 'Oxygen therapy'],
-      latestVitals: { o2sat: '91%', bp: '142/88', hr: '92', temp: '99.1' },
+      keyTerms: ['COPD', 'Spirometry', 'Bronchodilators', 'Oxygen therapy'],
+      latestVitals: { spO2: '91%', rr: '22', bp: '145/88', temp: '98.1' },
       insights: {
-        riskFactors: ['FEV1 decline of 8% since last year', 'Recent respiratory infections', 'Smoking cessation 2 years ago'],
-        recommendations: ['Increase bronchodilator frequency', 'Pulmonary rehabilitation referral', 'Annual flu/pneumonia vaccines'],
-        aiReasoning: 'High risk due to progressive lung function decline and recent infection history. AI predicts 15% exacerbation risk next 30 days.'
+        riskFactors: ['Declining FEV1', 'Recent infection history', 'Medication adherence concerns'],
+        recommendations: ['Optimize bronchodilator therapy', 'Pulmonary rehabilitation referral', 'Home oxygen assessment'],
+        aiReasoning: 'Risk score high due to functional decline and exacerbation history. AI predicts 35% risk of hospitalization in next 30 days.'
       }
     }
   ])
 
-  const filteredPatients = assignedPatients.filter(patient => 
+  const filteredPatients = assignedPatients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.condition.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  const handleCreateNote = () => {
+    setShowCreateNoteSidebar(true)
+    setShowRiskAssessmentSidebar(false)
+  }
+
+  const handleRiskAssessment = () => {
+    setShowRiskAssessmentSidebar(true)
+    setShowCreateNoteSidebar(false)
+  }
+
+  const closeSidebars = () => {
+    setShowCreateNoteSidebar(false)
+    setShowRiskAssessmentSidebar(false)
+  }
+
+  const handleNoteSubmit = (e) => {
+    e.preventDefault()
+    console.log('Creating note:', { patient: selectedPatient.name, ...noteForm })
+    alert('Note created successfully!')
+    setNoteForm({
+      title: '',
+      type: 'progress',
+      content: '',
+      priority: 'normal',
+      tags: [],
+      followUpDate: ''
+    })
+    closeSidebars()
+  }
+
+  const handleRiskSubmit = (e) => {
+    e.preventDefault()
+    console.log('Creating risk assessment:', { patient: selectedPatient.name, ...riskForm })
+    alert('Risk assessment created successfully!')
+    setRiskForm({
+      assessmentType: 'comprehensive',
+      riskFactors: [],
+      currentMedications: '',
+      symptoms: '',
+      vitalsConcerns: '',
+      labResults: '',
+      recommendations: '',
+      followUpPlan: '',
+      urgencyLevel: 'routine'
+    })
+    closeSidebars()
+  }
 
   const getRiskColor = (score) => {
     if (score >= 80) return 'danger'
@@ -95,49 +170,36 @@ const AIInsights = () => {
     return 'success'
   }
 
-  const getRiskLevel = (score) => {
-    if (score >= 80) return 'High Risk'
-    if (score >= 60) return 'Medium Risk'
-    return 'Low Risk'
-  }
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">AI Insights</h1>
-            <p className="text-gray-600 mt-1">AI-powered patient analysis and recommendations</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search patients..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <Badge variant="primary" className="inline-flex items-center">
-              <BoltIcon className="h-4 w-4 mr-1" />
-              AI Active
-            </Badge>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">AI Insights</h1>
+          <p className="text-gray-600 mt-1">AI-powered patient analysis and recommendations</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Patient List */}
-        <div className="space-y-4">
+        <div className="lg:col-span-1">
           <Card>
             <Card.Header>
               <Card.Title className="flex items-center">
                 <UserIcon className="h-5 w-5 mr-2" />
-                Assigned Patients ({filteredPatients.length})
+                Your Patients ({assignedPatients.length})
               </Card.Title>
+              <div className="mt-2">
+                <div className="relative">
+                  <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search patients..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
             </Card.Header>
             <Card.Content className="p-0">
               <div className="space-y-1">
@@ -145,27 +207,22 @@ const AIInsights = () => {
                   <div
                     key={patient.id}
                     onClick={() => setSelectedPatient(patient)}
-                    className={`p-4 border-l-4 cursor-pointer transition-colors ${
-                      selectedPatient?.id === patient.id
-                        ? 'bg-blue-50 border-blue-500'
-                        : 'hover:bg-gray-50 border-transparent'
+                    className={`p-4 cursor-pointer border-b border-gray-100 transition-colors ${
+                      selectedPatient?.id === patient.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium text-gray-900">{patient.name}</h3>
-                        <p className="text-sm text-gray-600">Age {patient.age} • {patient.condition}</p>
-                        <p className="text-xs text-gray-500 mt-1">Last visit: {patient.lastVisit}</p>
+                        <p className="text-sm text-gray-600">{patient.condition}</p>
+                        <p className="text-xs text-gray-500">Last visit: {patient.lastVisit}</p>
                       </div>
                       <div className="text-right">
                         <Badge variant={getRiskColor(patient.riskScore)}>
                           Risk: {patient.riskScore}
                         </Badge>
-                        <p className="text-xs text-gray-500 mt-1">{getRiskLevel(patient.riskScore)}</p>
+                        <div className="text-xs text-gray-500 mt-1">Age {patient.age}</div>
                       </div>
-                    </div>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-700 line-clamp-2">{patient.aiSummary}</p>
                     </div>
                   </div>
                 ))}
@@ -174,51 +231,34 @@ const AIInsights = () => {
           </Card>
         </div>
 
-        {/* AI Insights Details */}
-        <div className="space-y-4">
+        {/* AI Analysis Panel */}
+        <div className={`transition-all duration-300 ${(showCreateNoteSidebar || showRiskAssessmentSidebar) ? 'lg:col-span-1' : 'lg:col-span-2'}`}>
           {selectedPatient ? (
             <>
-              {/* Patient Overview */}
-              <Card>
+              <Card className="mb-6">
                 <Card.Header>
-                  <Card.Title className="flex items-center">
-                    <BoltIcon className="h-5 w-5 mr-2" />
-                    AI Analysis - {selectedPatient.name}
+                  <Card.Title className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <BoltIcon className="h-5 w-5 mr-2 text-yellow-500" />
+                      AI Analysis - {selectedPatient.name}
+                    </div>
+                    <Badge variant={getRiskColor(selectedPatient.riskScore)}>
+                      Risk Score: {selectedPatient.riskScore}
+                    </Badge>
                   </Card.Title>
                 </Card.Header>
                 <Card.Content>
                   <div className="space-y-4">
+                    {/* AI Summary */}
                     <div>
-                      <h4 className="font-medium text-gray-900 mb-2">AI Generated Summary</h4>
-                      <p className="text-gray-700 bg-blue-50 p-3 rounded-md">
-                        {selectedPatient.aiSummary}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium text-gray-900 mb-2">Risk Score Explanation</h4>
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-1 bg-gray-200 rounded-full h-4 relative">
-                          <div
-                            className={`h-4 rounded-full ${
-                              selectedPatient.riskScore >= 80 ? 'bg-red-500' :
-                              selectedPatient.riskScore >= 60 ? 'bg-yellow-500' : 'bg-green-500'
-                            }`}
-                            style={{ width: `${selectedPatient.riskScore}%` }}
-                          ></div>
-                          <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
-                            {selectedPatient.riskScore}%
-                          </span>
-                        </div>
-                        <Badge variant={getRiskColor(selectedPatient.riskScore)}>
-                          {getRiskLevel(selectedPatient.riskScore)}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-2">
+                      <h3 className="font-medium text-gray-900 mb-2">AI Summary</h3>
+                      <p className="text-gray-700 text-sm leading-relaxed">{selectedPatient.aiSummary}</p>
+                      <div className="mt-2 text-xs text-gray-500">
                         {selectedPatient.insights.aiReasoning}
-                      </p>
+                      </div>
                     </div>
 
+                    {/* Key Medical Terms */}
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2">Key Medical Terms Extracted</h4>
                       <div className="flex flex-wrap gap-2">
@@ -229,47 +269,35 @@ const AIInsights = () => {
                         ))}
                       </div>
                     </div>
-                  </div>
-                </Card.Content>
-              </Card>
 
-              {/* Latest Vitals */}
-              <Card>
-                <Card.Header>
-                  <Card.Title className="flex items-center">
-                    <HeartIcon className="h-5 w-5 mr-2" />
-                    Latest Vitals & Metrics
-                  </Card.Title>
-                </Card.Header>
-                <Card.Content>
-                  <div className="grid grid-cols-2 gap-4">
-                    {Object.entries(selectedPatient.latestVitals).map(([key, value]) => (
-                      <div key={key} className="bg-gray-50 p-3 rounded-md">
-                        <p className="text-xs text-gray-500 uppercase tracking-wide">
-                          {key === 'bp' ? 'Blood Pressure' :
-                           key === 'hr' ? 'Heart Rate' :
-                           key === 'temp' ? 'Temperature' :
-                           key === 'glucose' ? 'Glucose' :
-                           key === 'o2sat' ? 'O2 Saturation' :
-                           key === 'painScore' ? 'Pain Score' : key}
-                        </p>
-                        <p className="text-lg font-semibold text-gray-900">{value}</p>
+                    {/* Latest Vitals */}
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <HeartIcon className="h-4 w-4 mr-1 text-red-500" />
+                        Latest Vitals & Metrics
+                      </h4>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {Object.entries(selectedPatient.latestVitals).map(([key, value]) => (
+                          <div key={key} className="text-center">
+                            <div className="text-lg font-semibold text-gray-900">{value}</div>
+                            <div className="text-xs text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1')}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </Card.Content>
               </Card>
 
-              {/* Risk Factors & Recommendations */}
-              <Card>
+              <Card className="mb-6">
                 <Card.Header>
                   <Card.Title className="flex items-center">
-                    <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                    <ExclamationTriangleIcon className="h-5 w-5 mr-2 text-orange-500" />
                     AI Risk Analysis & Recommendations
                   </Card.Title>
                 </Card.Header>
                 <Card.Content>
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <h4 className="font-medium text-gray-900 mb-2 flex items-center">
                         <ExclamationTriangleIcon className="h-4 w-4 mr-1 text-red-500" />
@@ -305,11 +333,18 @@ const AIInsights = () => {
 
               {/* Action Buttons */}
               <div className="flex space-x-3">
-                <Button className="flex-1">
+                <Button 
+                  className="flex-1"
+                  onClick={handleCreateNote}
+                >
                   <DocumentTextIcon className="h-4 w-4 mr-2" />
                   Create Note
                 </Button>
-                <Button variant="secondary" className="flex-1">
+                <Button 
+                  variant="secondary" 
+                  className="flex-1"
+                  onClick={handleRiskAssessment}
+                >
                   <ChartBarIcon className="h-4 w-4 mr-2" />
                   Risk Assessment
                 </Button>
@@ -325,6 +360,180 @@ const AIInsights = () => {
             </Card>
           )}
         </div>
+
+        {/* Create Note Sidebar */}
+        {showCreateNoteSidebar && (
+          <div className="lg:col-span-1">
+            <Card>
+              <Card.Header>
+                <div className="flex items-center justify-between">
+                  <Card.Title className="flex items-center">
+                    <DocumentTextIcon className="h-5 w-5 mr-2" />
+                    Create Note
+                  </Card.Title>
+                  <button 
+                    onClick={closeSidebars}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </Card.Header>
+              <Card.Content>
+                <form onSubmit={handleNoteSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Patient
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedPatient?.name || ''}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Note Title
+                    </label>
+                    <input
+                      type="text"
+                      value={noteForm.title}
+                      onChange={(e) => setNoteForm({...noteForm, title: e.target.value})}
+                      placeholder="Enter note title..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Content
+                    </label>
+                    <textarea
+                      value={noteForm.content}
+                      onChange={(e) => setNoteForm({...noteForm, content: e.target.value})}
+                      placeholder="Enter note content..."
+                      rows={6}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex space-x-3 pt-4">
+                    <Button type="submit" className="flex-1">
+                      <CheckCircleIcon className="h-4 w-4 mr-2" />
+                      Save Note
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="secondary" 
+                      onClick={closeSidebars}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Card.Content>
+            </Card>
+          </div>
+        )}
+
+        {/* Risk Assessment Sidebar */}
+        {showRiskAssessmentSidebar && (
+          <div className="lg:col-span-1">
+            <Card>
+              <Card.Header>
+                <div className="flex items-center justify-between">
+                  <Card.Title className="flex items-center">
+                    <ChartBarIcon className="h-5 w-5 mr-2" />
+                    Risk Assessment
+                  </Card.Title>
+                  <button 
+                    onClick={closeSidebars}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </Card.Header>
+              <Card.Content>
+                <form onSubmit={handleRiskSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Patient
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedPatient?.name || ''}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Assessment Type
+                    </label>
+                    <select
+                      value={riskForm.assessmentType}
+                      onChange={(e) => setRiskForm({...riskForm, assessmentType: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="comprehensive">Comprehensive Risk Assessment</option>
+                      <option value="cardiac">Cardiac Risk Assessment</option>
+                      <option value="surgical">Surgical Risk Assessment</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Risk Factors
+                    </label>
+                    <textarea
+                      value={riskForm.riskFactors.join(', ')}
+                      onChange={(e) => setRiskForm({...riskForm, riskFactors: e.target.value.split(', ').filter(f => f.trim())})}
+                      placeholder="Enter risk factors separated by commas..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Recommendations
+                    </label>
+                    <textarea
+                      value={riskForm.recommendations}
+                      onChange={(e) => setRiskForm({...riskForm, recommendations: e.target.value})}
+                      placeholder="Enter clinical recommendations..."
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex space-x-3 pt-4">
+                    <Button type="submit" className="flex-1">
+                      <CheckCircleIcon className="h-4 w-4 mr-2" />
+                      Save Assessment
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="secondary" 
+                      onClick={closeSidebars}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Card.Content>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

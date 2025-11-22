@@ -1,14 +1,25 @@
-import { useState } from 'react'
-import { PlusIcon, MagnifyingGlassIcon, UserGroupIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { useState, useEffect } from 'react'
+import { PlusIcon, MagnifyingGlassIcon, UserGroupIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import staffService from '../../services/staffService'
+import { useAuth } from '../../context/AuthContext'
 
 const StaffManagement = () => {
   const [showRegistrationForm, setShowRegistrationForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterRole, setFilterRole] = useState('')
   const [editingStaff, setEditingStaff] = useState(null)
+  const [staff, setStaff] = useState([])
+  const [statistics, setStatistics] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [showStaffDetails, setShowStaffDetails] = useState(false)
+  const [selectedStaff, setSelectedStaff] = useState(null)
+  
+  const { user, isAuthenticated } = useAuth()
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -26,64 +37,49 @@ const StaffManagement = () => {
     emergencyPhone: ''
   })
 
-  const [staff] = useState([
-    {
-      id: 1,
-      name: 'Dr. Sarah Smith',
-      email: 'sarah.smith@healthcare.com',
-      phone: '(555) 111-2222',
-      role: 'Doctor',
-      department: 'Cardiology',
-      specialization: 'Interventional Cardiology',
-      employeeId: 'DOC001',
-      status: 'Active',
-      dateOfJoining: '2022-01-15',
-      licenseNumber: 'MD123456',
-      patientsAssigned: 45
-    },
-    {
-      id: 2,
-      name: 'Nurse Johnson',
-      email: 'johnson@healthcare.com',
-      phone: '(555) 222-3333',
-      role: 'Nurse',
-      department: 'ICU',
-      specialization: 'Critical Care',
-      employeeId: 'NUR001',
-      status: 'Active',
-      dateOfJoining: '2023-03-10',
-      licenseNumber: 'RN789012',
-      patientsAssigned: 12
-    },
-    {
-      id: 3,
-      name: 'Dr. Michael Brown',
-      email: 'michael.brown@healthcare.com',
-      phone: '(555) 333-4444',
-      role: 'Doctor',
-      department: 'Emergency',
-      specialization: 'Emergency Medicine',
-      employeeId: 'DOC002',
-      status: 'On Leave',
-      dateOfJoining: '2021-08-20',
-      licenseNumber: 'MD345678',
-      patientsAssigned: 0
-    },
-    {
-      id: 4,
-      name: 'Admin Wilson',
-      email: 'admin.wilson@healthcare.com',
-      phone: '(555) 444-5555',
-      role: 'Admin',
-      department: 'Administration',
-      specialization: 'Healthcare Administration',
-      employeeId: 'ADM001',
-      status: 'Active',
-      dateOfJoining: '2020-05-01',
-      licenseNumber: 'HA567890',
-      patientsAssigned: 0
+  // Check authentication
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setError('You must be logged in to access staff management.')
+      return
     }
-  ])
+  }, [isAuthenticated])
+
+  // Load staff data
+  const loadStaff = async () => {
+    try {
+      setIsLoading(true)
+      setError('')
+      
+      const response = await staffService.getStaff()
+      if (response.success) {
+        setStaff(response.staff || [])
+      }
+    } catch (err) {
+      setError('Failed to load staff: ' + err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Load statistics
+  const loadStatistics = async () => {
+    try {
+      const response = await staffService.getStaffStatistics()
+      if (response.success) {
+        setStatistics(response.statistics)
+      }
+    } catch (err) {
+      console.error('Failed to load statistics:', err)
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadStaff()
+      loadStatistics()
+    }
+  }, [isAuthenticated])
 
   const handleInputChange = (e) => {
     setFormData({
@@ -92,18 +88,44 @@ const StaffManagement = () => {
     })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Staff Registration:', formData)
-    // TODO: Implement actual staff registration API call
-    if (editingStaff) {
-      alert('Staff member updated successfully!')
-      setEditingStaff(null)
-    } else {
-      alert('Staff member registered successfully!')
+    
+    if (!isAuthenticated) {
+      setError('You must be logged in to register staff.')
+      return
     }
-    setShowRegistrationForm(false)
-    resetForm()
+    
+    setIsLoading(true)
+    setError('')
+    setSuccessMessage('')
+    
+    try {
+      if (editingStaff) {
+        // Update existing staff
+        const response = await staffService.updateStaff(editingStaff.id, formData)
+        if (response.success) {
+          setSuccessMessage('Staff member updated successfully!')
+        }
+      } else {
+        // Register new staff
+        const response = await staffService.registerStaff(formData)
+        if (response.success) {
+          setSuccessMessage('Staff member registered successfully!')
+        }
+      }
+      
+      setShowRegistrationForm(false)
+      setEditingStaff(null)
+      resetForm()
+      await loadStaff()
+      await loadStatistics()
+      
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const resetForm = () => {
@@ -127,8 +149,8 @@ const StaffManagement = () => {
   const handleEdit = (staffMember) => {
     setEditingStaff(staffMember)
     setFormData({
-      firstName: staffMember.name.split(' ')[0],
-      lastName: staffMember.name.split(' ').slice(1).join(' '),
+      firstName: staffMember.firstName,
+      lastName: staffMember.lastName,
       email: staffMember.email,
       phone: staffMember.phone,
       role: staffMember.role,
@@ -137,15 +159,43 @@ const StaffManagement = () => {
       employeeId: staffMember.employeeId,
       licenseNumber: staffMember.licenseNumber,
       dateOfJoining: staffMember.dateOfJoining,
-      address: '',
-      emergencyContact: '',
-      emergencyPhone: ''
+      address: staffMember.address || '',
+      emergencyContact: staffMember.emergencyContactName || '',
+      emergencyPhone: staffMember.emergencyContactPhone || ''
     })
     setShowRegistrationForm(true)
   }
 
+  const handleViewStaff = (staffMember) => {
+    setSelectedStaff(staffMember)
+    setShowStaffDetails(true)
+  }
+
+  const handleDelete = async (staffMember) => {
+    if (!window.confirm(`Are you sure you want to delete ${staffMember.fullName}?`)) {
+      return
+    }
+    
+    try {
+      setIsLoading(true)
+      setError('')
+      setSuccessMessage('')
+      
+      const response = await staffService.deleteStaff(staffMember.id)
+      if (response.success) {
+        setSuccessMessage('Staff member deleted successfully!')
+        await loadStaff()
+        await loadStatistics()
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const filteredStaff = staff.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = member.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          member.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          member.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
@@ -178,12 +228,26 @@ const StaffManagement = () => {
               setShowRegistrationForm(true)
             }}
             className="inline-flex items-center"
+            disabled={isLoading}
           >
             <PlusIcon className="h-4 w-4 mr-2" />
             Add Staff Member
           </Button>
         </div>
       </div>
+
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-md">
+          {successMessage}
+        </div>
+      )}
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -195,7 +259,7 @@ const StaffManagement = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Staff</p>
-                <p className="text-2xl font-bold text-gray-900">{staff.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statistics?.total || staff.length}</p>
               </div>
             </div>
           </Card.Content>
@@ -209,7 +273,7 @@ const StaffManagement = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Doctors</p>
-                <p className="text-2xl font-bold text-gray-900">{staff.filter(s => s.role === 'Doctor').length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statistics?.by_role?.Doctor || staff.filter(s => s.role === 'Doctor').length}</p>
               </div>
             </div>
           </Card.Content>
@@ -223,7 +287,7 @@ const StaffManagement = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Nurses</p>
-                <p className="text-2xl font-bold text-gray-900">{staff.filter(s => s.role === 'Nurse').length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statistics?.by_role?.Nurse || staff.filter(s => s.role === 'Nurse').length}</p>
               </div>
             </div>
           </Card.Content>
@@ -237,7 +301,7 @@ const StaffManagement = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Active Staff</p>
-                <p className="text-2xl font-bold text-gray-900">{staff.filter(s => s.status === 'Active').length}</p>
+                <p className="text-2xl font-bold text-gray-900">{statistics?.by_status?.Active || staff.filter(s => s.status === 'Active').length}</p>
               </div>
             </div>
           </Card.Content>
@@ -357,9 +421,7 @@ const StaffManagement = () => {
                       <option value="">Select Role</option>
                       <option value="Doctor">Doctor</option>
                       <option value="Nurse">Nurse</option>
-                      <option value="Admin">Admin</option>
-                      <option value="Technician">Technician</option>
-                      <option value="Pharmacist">Pharmacist</option>
+                      
                     </select>
                   </div>
 
@@ -403,8 +465,8 @@ const StaffManagement = () => {
                       name="licenseNumber"
                       value={formData.licenseNumber}
                       onChange={handleInputChange}
-                      required
                       className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Professional license number"
                     />
                   </div>
 
@@ -449,11 +511,16 @@ const StaffManagement = () => {
                 <Button
                   variant="secondary"
                   onClick={() => setShowRegistrationForm(false)}
+                  disabled={isLoading}
                 >
                   Cancel
                 </Button>
-                <Button type="submit">
-                  {editingStaff ? 'Update Staff Member' : 'Register Staff Member'}
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? (
+                    editingStaff ? 'Updating...' : 'Registering...'
+                  ) : (
+                    editingStaff ? 'Update Staff Member' : 'Register Staff Member'
+                  )}
                 </Button>
               </div>
             </form>
@@ -520,60 +587,234 @@ const StaffManagement = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredStaff.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-700">
-                            {member.name.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{member.name}</div>
-                          <div className="text-sm text-gray-500">ID: {member.employeeId}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{member.phone}</div>
-                      <div className="text-sm text-gray-500">{member.email}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col space-y-1">
-                        <Badge variant={getRoleColor(member.role)}>
-                          {member.role}
-                        </Badge>
-                        <div className="text-sm text-gray-500">{member.department}</div>
-                        <div className="text-xs text-gray-400">{member.specialization}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={member.status === 'Active' ? 'success' : 'warning'}>
-                        {member.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {member.patientsAssigned}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button 
-                        onClick={() => handleEdit(member)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                      >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                      Loading staff...
                     </td>
                   </tr>
-                ))}
+                ) : filteredStaff.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                      No staff members found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStaff.map((member) => (
+                    <tr key={member.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-700">
+                              {member.fullName.split(' ').map(n => n[0]).join('')}
+                            </span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{member.fullName}</div>
+                            <div className="text-sm text-gray-500">ID: {member.employeeId}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{member.phone}</div>
+                        <div className="text-sm text-gray-500">{member.email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col space-y-1">
+                          <Badge variant={getRoleColor(member.role)}>
+                            {member.role}
+                          </Badge>
+                          <div className="text-sm text-gray-500">{member.department}</div>
+                          <div className="text-xs text-gray-400">{member.specialization}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant={member.status === 'Active' ? 'success' : 'warning'}>
+                          {member.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {member.patientsAssigned || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button 
+                          onClick={() => handleViewStaff(member)}
+                          className="text-green-600 hover:text-green-900 mr-3 p-1 rounded hover:bg-green-50"
+                          title="View Details"
+                        >
+                          <EyeIcon className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleEdit(member)}
+                          className="text-blue-600 hover:text-blue-900 mr-3 p-1 rounded hover:bg-blue-50"
+                          title="Edit Staff"
+                          disabled={isLoading}
+                        >
+                          <PencilIcon className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(member)}
+                          className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50"
+                          title="Delete Staff"
+                          disabled={isLoading}
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </Card.Content>
       </Card>
+
+      {/* Staff Details Modal */}
+      {showStaffDetails && selectedStaff && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Staff Details</h2>
+                <button
+                  onClick={() => setShowStaffDetails(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Personal Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Personal Information</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Employee ID</label>
+                      <p className="text-sm text-gray-900">{selectedStaff.employeeId}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Full Name</label>
+                      <p className="text-sm text-gray-900">{selectedStaff.fullName}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Email Address</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.email}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Phone Number</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.phone}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Address</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.address || 'N/A'}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Emergency Contact</label>
+                      <p className="text-sm text-gray-900">{selectedStaff.emergencyContactName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Emergency Phone</label>
+                      <p className="text-sm text-gray-900">{selectedStaff.emergencyContactPhone || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Professional Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Professional Information</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Role</label>
+                      <Badge variant={getRoleColor(selectedStaff.role)}>
+                        {selectedStaff.role}
+                      </Badge>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Department</label>
+                      <p className="text-sm text-gray-900">{selectedStaff.department}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Specialization</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.specialization || 'N/A'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">License Number</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.licenseNumber || 'N/A'}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Date of Joining</label>
+                      <p className="text-sm text-gray-900">{selectedStaff.dateOfJoining ? new Date(selectedStaff.dateOfJoining).toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Status</label>
+                      <Badge variant={selectedStaff.status === 'Active' ? 'success' : 'warning'}>
+                        {selectedStaff.status}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Patients Assigned</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.patientsAssigned || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Registration Information */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Registration Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Registration Date</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.createdAt ? new Date(selectedStaff.createdAt).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Last Updated</label>
+                    <p className="text-sm text-gray-900">{selectedStaff.updatedAt ? new Date(selectedStaff.updatedAt).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowStaffDetails(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowStaffDetails(false)
+                    handleEdit(selectedStaff)
+                  }}
+                >
+                  Edit Staff
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

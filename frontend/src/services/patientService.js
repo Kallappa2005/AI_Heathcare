@@ -4,10 +4,10 @@ export const patientService = {
   // Get all patients with optional filters
   async getPatients(params = {}) {
     try {
-      const response = await api.get('/patients', { params })
+      const response = await api.get('/patients/', { params })
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch patients')
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to fetch patients')
     }
   },
 
@@ -21,14 +21,19 @@ export const patientService = {
     }
   },
 
-  // Create new patient
+  // Create new patient / Register patient
   async createPatient(patientData) {
     try {
-      const response = await api.post('/patients', patientData)
+      const response = await api.post('/patients/register', patientData)
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to create patient')
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to create patient')
     }
+  },
+
+  // Register patient (alias for createPatient)
+  async registerPatient(patientData) {
+    return this.createPatient(patientData)
   },
 
   // Update patient
@@ -74,10 +79,20 @@ export const patientService = {
   // Search patients with natural language
   async searchPatients(query, filters = {}) {
     try {
-      const response = await api.post('/patients/search', { query, filters })
+      const response = await api.get(`/patients/search?q=${encodeURIComponent(query)}`, { params: filters })
       return response.data
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Search failed')
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Search failed')
+    }
+  },
+
+  // Validate patient ID availability
+  async validatePatientId(patientId) {
+    try {
+      const response = await api.get(`/patients/validate-patient-id/${patientId}`)
+      return response.data
+    } catch (error) {
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to validate patient ID')
     }
   }
 }

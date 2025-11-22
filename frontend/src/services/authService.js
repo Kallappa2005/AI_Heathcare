@@ -1,45 +1,95 @@
 import api from './api'
 
-export const authService = {
-  // Login user
-  async login(email, password) {
+class AuthService {
+  async login(credentials) {
     try {
-      const response = await api.post('/auth/login', { email, password })
-      return response.data
+      const response = await api.post('/auth/login', credentials);
+      const { user, token } = response.data;
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      return { user, token };
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Login failed')
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw new Error('Login failed. Please check your credentials.');
     }
-  },
+  }
 
-  // Register user
   async register(userData) {
     try {
-      const response = await api.post('/auth/register', userData)
-      return response.data
+      const response = await api.post('/auth/register', userData);
+      const { user, token } = response.data;
+      
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      return { user, token };
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Registration failed')
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+      throw new Error('Registration failed. Please try again.');
     }
-  },
+  }
 
-  // Get current user profile
-  async getProfile() {
+  async verifyToken() {
     try {
-      const response = await api.get('/auth/profile')
-      return response.data
+      const response = await api.get('/auth/verify-token');
+      return response.data;
     } catch (error) {
-      throw new Error(error.response?.data?.message || 'Failed to fetch profile')
+      this.logout();
+      throw error;
     }
-  },
+  }
 
-  // Refresh token
-  async refreshToken() {
-    try {
-      const response = await api.post('/auth/refresh')
-      return response.data
-    } catch (error) {
-      throw new Error(error.response?.data?.message || 'Token refresh failed')
+  logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }
+
+  getCurrentUser() {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  }
+
+  getToken() {
+    return localStorage.getItem('token');
+  }
+
+  isAuthenticated() {
+    return !!this.getToken();
+  }
+
+  // Role-specific login methods for different user types
+  async loginAsAdmin(credentials) {
+    const response = await this.login(credentials);
+    if (response.user.role !== 'admin') {
+      this.logout();
+      throw new Error('Access denied. Admin privileges required.');
     }
+    return response;
+  }
+
+  async loginAsDoctor(credentials) {
+    const response = await this.login(credentials);
+    if (response.user.role !== 'doctor') {
+      this.logout();
+      throw new Error('Access denied. Doctor privileges required.');
+    }
+    return response;
+  }
+
+  async loginAsNurse(credentials) {
+    const response = await this.login(credentials);
+    if (response.user.role !== 'nurse') {
+      this.logout();
+      throw new Error('Access denied. Nurse privileges required.');
+    }
+    return response;
   }
 }
 
-export default authService
+export default new AuthService();

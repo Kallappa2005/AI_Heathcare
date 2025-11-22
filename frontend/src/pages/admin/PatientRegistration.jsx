@@ -1,13 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PlusIcon, MagnifyingGlassIcon, UserGroupIcon, EyeIcon } from '@heroicons/react/24/outline'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import patientService from '../../services/patientService'
+import { useAuth } from '../../context/AuthContext'
 
 const PatientRegistration = () => {
   const [showRegistrationForm, setShowRegistrationForm] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [formData, setFormData] = useState({
+    patientId: '',
     firstName: '',
     lastName: '',
     dateOfBirth: '',
@@ -23,45 +26,23 @@ const PatientRegistration = () => {
     insuranceProvider: '',
     insuranceNumber: ''
   })
+  
+  const [patients, setPatients] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [showPatientDetails, setShowPatientDetails] = useState(false)
+  const [selectedPatient, setSelectedPatient] = useState(null)
+  
+  const { user, isAuthenticated } = useAuth()
 
-  const [patients] = useState([
-    {
-      id: 1,
-      name: 'John Anderson',
-      age: 67,
-      gender: 'Male',
-      phone: '(555) 123-4567',
-      email: 'john.anderson@email.com',
-      condition: 'Hypertension',
-      registeredDate: '2024-11-15',
-      status: 'Active',
-      lastVisit: '2024-11-19'
-    },
-    {
-      id: 2,
-      name: 'Maria Garcia',
-      age: 54,
-      gender: 'Female',
-      phone: '(555) 234-5678',
-      email: 'maria.garcia@email.com',
-      condition: 'Diabetes Type 2',
-      registeredDate: '2024-11-10',
-      status: 'Active',
-      lastVisit: '2024-11-14'
-    },
-    {
-      id: 3,
-      name: 'Robert Chen',
-      age: 72,
-      gender: 'Male',
-      phone: '(555) 345-6789',
-      email: 'robert.chen@email.com',
-      condition: 'Heart Disease',
-      registeredDate: '2024-11-05',
-      status: 'Inactive',
-      lastVisit: '2024-11-18'
+  // Check authentication
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setError('You must be logged in to access patient registration.')
+      return
     }
-  ])
+  }, [isAuthenticated])
 
   const handleInputChange = (e) => {
     setFormData({
@@ -70,38 +51,122 @@ const PatientRegistration = () => {
     })
   }
 
-  const handleSubmit = (e) => {
+  const handleViewPatient = (patient) => {
+    setSelectedPatient(patient)
+    setShowPatientDetails(true)
+  }
+
+  const loadPatients = async () => {
+    try {
+      setIsLoading(true)
+      const response = await patientService.getPatients()
+      
+      if (response.success && response.patients) {
+        // Transform backend data to match frontend format
+        const transformedPatients = response.patients.map(patient => ({
+          id: patient.id,
+          name: patient.fullName,
+          age: patient.age,
+          gender: patient.gender,
+          phone: patient.phone,
+          email: patient.email,
+          address: patient.address,
+          emergencyContactName: patient.emergencyContactName,
+          emergencyContactPhone: patient.emergencyContactPhone,
+          medicalHistory: patient.medicalHistory,
+          currentMedications: patient.currentMedications,
+          allergies: patient.allergies,
+          insuranceProvider: patient.insuranceProvider,
+          insuranceNumber: patient.insuranceNumber,
+          condition: 'General', // Default since we don't have condition in our model
+          registeredDate: patient.createdAt ? new Date(patient.createdAt).toISOString().split('T')[0] : '',
+          status: 'Active', // Default status
+          lastVisit: patient.createdAt ? new Date(patient.createdAt).toISOString().split('T')[0] : '',
+          patientId: patient.medicalRecordNumber || patient.patientId
+        }))
+        
+        setPatients(transformedPatients)
+      }
+    } catch (err) {
+      setError('Failed to load patients: ' + err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPatients()
+  }, [])
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Patient Registration:', formData)
-    // TODO: Implement actual patient registration API call
-    alert('Patient registered successfully!')
-    setShowRegistrationForm(false)
-    setFormData({
-      firstName: '',
-      lastName: '',
-      dateOfBirth: '',
-      gender: '',
-      phone: '',
-      email: '',
-      address: '',
-      emergencyContact: '',
-      emergencyPhone: '',
-      medicalHistory: '',
-      currentMedications: '',
-      allergies: '',
-      insuranceProvider: '',
-      insuranceNumber: ''
-    })
+    
+    // Check authentication first
+    if (!isAuthenticated) {
+      setError('You must be logged in to register a patient.')
+      return
+    }
+    
+    setIsLoading(true)
+    setError('')
+    setSuccessMessage('')
+    
+    try {
+      console.log('Attempting to register patient:', formData)
+      console.log('User authenticated:', isAuthenticated)
+      console.log('Token exists:', !!localStorage.getItem('token'))
+      
+      const response = await patientService.registerPatient(formData)
+      
+      if (response.success) {
+        setSuccessMessage('Patient registered successfully!')
+        setShowRegistrationForm(false)
+        setFormData({
+          patientId: '',
+          firstName: '',
+          lastName: '',
+          dateOfBirth: '',
+          gender: '',
+          phone: '',
+          email: '',
+          address: '',
+          emergencyContact: '',
+          emergencyPhone: '',
+          medicalHistory: '',
+          currentMedications: '',
+          allergies: '',
+          insuranceProvider: '',
+          insuranceNumber: ''
+        })
+        
+        // Refresh patients list
+        await loadPatients()
+      }
+    } catch (err) {
+      console.error('Patient registration error:', err)
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     patient.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    patient.condition.toLowerCase().includes(searchQuery.toLowerCase())
+    patient.condition.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (patient.patientId && patient.patientId.toLowerCase().includes(searchQuery.toLowerCase()))
   )
 
   return (
     <div className="space-y-6">
+      {/* Debug Info (remove in production) */}
+      {/* <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
+        <strong>Debug Info:</strong> 
+        User: {user?.email || 'Not logged in'} | 
+        Role: {user?.role || 'N/A'} | 
+        Token: {localStorage.getItem('token') ? 'Present' : 'Missing'}
+      </div> */}
+
       {/* Header */}
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between">
@@ -118,6 +183,19 @@ const PatientRegistration = () => {
           </Button>
         </div>
       </div>
+
+      {/* Success/Error Messages */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-md">
+          {successMessage}
+        </div>
+      )}
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
 
       {/* Registration Form Modal */}
       {showRegistrationForm && (
@@ -136,11 +214,30 @@ const PatientRegistration = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
+              {error && (
+                <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+                  {error}
+                </div>
+              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Personal Information */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
                   
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Patient ID</label>
+                    <input
+                      type="text"
+                      name="patientId"
+                      value={formData.patientId}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="e.g., PAT-001"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                     <input
@@ -324,11 +421,12 @@ const PatientRegistration = () => {
                 <Button
                   variant="secondary"
                   onClick={() => setShowRegistrationForm(false)}
+                  disabled={isLoading}
                 >
                   Cancel
                 </Button>
-                <Button type="submit">
-                  Register Patient
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Registering...' : 'Register Patient'}
                 </Button>
               </div>
             </form>
@@ -364,6 +462,9 @@ const PatientRegistration = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Patient ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Patient
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -384,49 +485,225 @@ const PatientRegistration = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPatients.map((patient) => (
-                  <tr key={patient.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                          <span className="text-sm font-medium text-gray-700">
-                            {patient.name.split(' ').map(n => n[0]).join('')}
-                          </span>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{patient.name}</div>
-                          <div className="text-sm text-gray-500">Age {patient.age} • {patient.gender}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{patient.phone}</div>
-                      <div className="text-sm text-gray-500">{patient.email}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{patient.condition}</div>
-                      <div className="text-sm text-gray-500">Last visit: {new Date(patient.lastVisit).toLocaleDateString()}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge variant={patient.status === 'Active' ? 'success' : 'default'}>
-                        {patient.status}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(patient.registeredDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button className="text-blue-600 hover:text-blue-900 mr-3">
-                        <EyeIcon className="h-4 w-4" />
-                      </button>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                      Loading patients...
                     </td>
                   </tr>
-                ))}
+                ) : filteredPatients.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                      No patients found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPatients.map((patient) => (
+                    <tr key={patient.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {patient.patientId || 'N/A'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                            <span className="text-sm font-medium text-gray-700">
+                              {patient.name.split(' ').map(n => n[0]).join('')}
+                            </span>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{patient.name}</div>
+                            <div className="text-sm text-gray-500">Age {patient.age || 'N/A'} • {patient.gender}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{patient.phone}</div>
+                        <div className="text-sm text-gray-500">{patient.email}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{patient.condition}</div>
+                        <div className="text-sm text-gray-500">Last visit: {new Date(patient.lastVisit).toLocaleDateString()}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <Badge variant={patient.status === 'Active' ? 'success' : 'default'}>
+                          {patient.status}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(patient.registeredDate).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button 
+                          onClick={() => handleViewPatient(patient)}
+                          className="text-blue-600 hover:text-blue-900 mr-3 p-1 rounded hover:bg-blue-50"
+                          title="View Patient Details"
+                        >
+                          <EyeIcon className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </Card.Content>
       </Card>
+
+      {/* Patient Details Modal */}
+      {showPatientDetails && selectedPatient && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Patient Details</h2>
+                <button
+                  onClick={() => setShowPatientDetails(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="text-2xl">×</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Personal Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Personal Information</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Patient ID</label>
+                      <p className="text-sm text-gray-900">{selectedPatient.patientId || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Full Name</label>
+                      <p className="text-sm text-gray-900">{selectedPatient.name}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Age</label>
+                      <p className="text-sm text-gray-900">{selectedPatient.age || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Gender</label>
+                      <p className="text-sm text-gray-900">{selectedPatient.gender}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Phone Number</label>
+                    <p className="text-sm text-gray-900">{selectedPatient.phone}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Email Address</label>
+                    <p className="text-sm text-gray-900">{selectedPatient.email}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Address</label>
+                    <p className="text-sm text-gray-900">{selectedPatient.address || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Medical & Emergency Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900 border-b pb-2">Medical & Emergency Information</h3>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Emergency Contact</label>
+                    <p className="text-sm text-gray-900">{selectedPatient.emergencyContactName || 'N/A'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Emergency Phone</label>
+                    <p className="text-sm text-gray-900">{selectedPatient.emergencyContactPhone || 'N/A'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Medical History</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                      {selectedPatient.medicalHistory || 'No medical history recorded'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Current Medications</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                      {selectedPatient.currentMedications || 'No current medications recorded'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Allergies</label>
+                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded">
+                      {selectedPatient.allergies || 'No allergies recorded'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Insurance Provider</label>
+                      <p className="text-sm text-gray-900">{selectedPatient.insuranceProvider || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500">Insurance Number</label>
+                      <p className="text-sm text-gray-900">{selectedPatient.insuranceNumber || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Registration Information */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Registration Information</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Registration Date</label>
+                    <p className="text-sm text-gray-900">{new Date(selectedPatient.registeredDate).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Status</label>
+                    <Badge variant={selectedPatient.status === 'Active' ? 'success' : 'default'}>
+                      {selectedPatient.status}
+                    </Badge>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-500">Last Visit</label>
+                    <p className="text-sm text-gray-900">{new Date(selectedPatient.lastVisit).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowPatientDetails(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    // Future: Add edit functionality
+                    console.log('Edit patient:', selectedPatient)
+                  }}
+                >
+                  Edit Patient
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
