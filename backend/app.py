@@ -14,6 +14,7 @@ from app.routes.user_routes import user_bp
 from app.routes.patient_routes import patient_bp
 from app.routes.staff_routes import staff_bp
 from app.routes.vitals_routes import vitals_bp
+from app.routes.lab_reports_routes import lab_reports_bp
 
 def create_app():
     """Create and configure Flask application"""
@@ -62,6 +63,7 @@ def create_app():
     app.register_blueprint(patient_bp, url_prefix='/api/patients')
     app.register_blueprint(staff_bp, url_prefix='/api/staff')
     app.register_blueprint(vitals_bp, url_prefix='/api/vitals')
+    app.register_blueprint(lab_reports_bp, url_prefix='/api/lab-reports')
     
     # Root endpoint
     @app.route('/')

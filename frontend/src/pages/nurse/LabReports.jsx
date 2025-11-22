@@ -15,6 +15,8 @@ import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import vitalsService from '../../services/vitalsService'
+import labReportsService from '../../services/labReportsService'
+import fileService from '../../services/fileService'
 
 const LabReports = () => {
   const [selectedPatient, setSelectedPatient] = useState(null)
@@ -26,6 +28,9 @@ const LabReports = () => {
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [labReports, setLabReports] = useState([])
+  const [submitting, setSubmitting] = useState(false)
+  const [reportsLoading, setReportsLoading] = useState(false)
   
   const [reportForm, setReportForm] = useState({
     patientId: '',
@@ -44,6 +49,7 @@ const LabReports = () => {
   // Load patients data on component mount
   useEffect(() => {
     loadPatientsData()
+    console.log('Loaded patients data for lab reports')
   }, [])
 
   const loadPatientsData = async () => {
@@ -52,6 +58,7 @@ const LabReports = () => {
       setError('')
       
       const response = await vitalsService.getAllPatients()
+      console.log('Patients data response:', response)
       
       if (response.success && response.patients) {
         setPatients(response.patients)
@@ -105,48 +112,36 @@ const LabReports = () => {
     }
   ])
 
-  const [labReports] = useState([
-    {
-      id: 1,
-      patientId: 'P001',
-      patientName: 'John Anderson',
-      testType: 'Blood Chemistry',
-      testName: 'Basic Metabolic Panel',
-      orderDate: '2024-11-20',
-      collectionDate: '2024-11-20',
-      resultDate: '2024-11-21',
-      status: 'completed',
-      priority: 'normal',
-      results: [
-        { parameter: 'Glucose', value: '142', unit: 'mg/dL', normalRange: '70-100', status: 'high' },
-        { parameter: 'Sodium', value: '138', unit: 'mEq/L', normalRange: '135-145', status: 'normal' },
-        { parameter: 'Potassium', value: '4.2', unit: 'mEq/L', normalRange: '3.5-5.0', status: 'normal' },
-        { parameter: 'Chloride', value: '102', unit: 'mEq/L', normalRange: '98-107', status: 'normal' }
-      ],
-      criticalValues: ['Glucose'],
-      reportedBy: 'Lab Tech Smith'
-    },
-    {
-      id: 2,
-      patientId: 'P002',
-      patientName: 'Sarah Johnson',
-      testType: 'Hematology',
-      testName: 'Complete Blood Count',
-      orderDate: '2024-11-19',
-      collectionDate: '2024-11-19',
-      resultDate: '2024-11-20',
-      status: 'completed',
-      priority: 'normal',
-      results: [
-        { parameter: 'WBC', value: '7.5', unit: 'K/μL', normalRange: '4.0-10.0', status: 'normal' },
-        { parameter: 'RBC', value: '4.8', unit: 'M/μL', normalRange: '4.5-5.5', status: 'normal' },
-        { parameter: 'Hemoglobin', value: '14.2', unit: 'g/dL', normalRange: '12.0-16.0', status: 'normal' },
-        { parameter: 'Hematocrit', value: '42.1', unit: '%', normalRange: '36-46', status: 'normal' }
-      ],
-      criticalValues: [],
-      reportedBy: 'Lab Tech Johnson'
+  // Load lab reports data
+  const loadLabReports = async () => {
+    try {
+      setReportsLoading(true)
+      const response = await labReportsService.getLabReports()
+      console.log('Lab reports response:', response)
+      
+      if (response.success && response.reports) {
+        setLabReports(response.reports)
+      } else {
+        console.error('Failed to load lab reports:', response)
+      }
+    } catch (error) {
+      console.error('Error loading lab reports:', error)
+    } finally {
+      setReportsLoading(false)
     }
-  ])
+  }
+
+  // Load lab reports on component mount
+  useEffect(() => {
+    loadLabReports()
+  }, [])
+
+  // Load lab reports when View Reports tab is activated
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      loadLabReports()
+    }
+  }, [activeTab])
 
   const filteredPatients = patients.filter(patient =>
     patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -184,26 +179,53 @@ const LabReports = () => {
     setSelectedFile(e.target.files[0])
   }
 
-  const handleFileUpload = (e) => {
-    e.preventDefault()
-    if (!selectedFile) {
-      alert('Please select a file to upload')
-      return
+  const handleSubmitReport = async () => {
+    try {
+      setSubmitting(true)
+      
+      const reportData = {
+        ...reportForm,
+        testResults: reportForm.results,
+        attachments: selectedFile ? [selectedFile] : []
+      }
+      
+      const response = await labReportsService.createLabReport(reportData)
+      
+      if (response.success) {
+        // Reset form and reload data
+        setReportForm({
+          patientId: '',
+          testType: '',
+          testName: '',
+          orderDate: '',
+          collectionDate: '',
+          resultDate: new Date().toISOString().slice(0, 10),
+          status: 'completed',
+          priority: 'normal',
+          results: [],
+          notes: '',
+          attachments: []
+        })
+        setSelectedFile(null)
+        setShowReportForm(false)
+        loadLabReports() // Reload reports
+        console.log('Lab report created successfully:', response)
+      } else {
+        console.error('Failed to create lab report:', response)
+        setError('Failed to create lab report. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error creating lab report:', error)
+      setError('Error creating lab report. Please try again.')
+    } finally {
+      setSubmitting(false)
     }
-    console.log('Uploading lab file:', selectedFile.name)
-    // TODO: Implement actual file upload API call
-    alert(`Lab report "${selectedFile.name}" uploaded successfully!`)
-    setShowUploadModal(false)
-    setSelectedFile(null)
   }
 
   const addTestResult = () => {
     setReportForm({
       ...reportForm,
-      results: [
-        ...reportForm.results,
-        { parameter: '', value: '', unit: '', normalRange: '', status: 'normal' }
-      ]
+      results: [...reportForm.results, { parameter: '', value: '', unit: '', normalRange: '', status: 'normal' }]
     })
   }
 
@@ -224,25 +246,133 @@ const LabReports = () => {
     })
   }
 
-  const handleSubmit = (e) => {
+  const handleFileUpload = async (e) => {
     e.preventDefault()
-    console.log('Submitting lab report:', reportForm)
-    alert('Lab report saved successfully!')
-    setShowReportForm(false)
-    setReportForm({
-      patientId: '',
-      testType: '',
-      testName: '',
-      orderDate: '',
-      collectionDate: '',
-      resultDate: new Date().toISOString().slice(0, 10),
-      status: 'completed',
-      priority: 'normal',
-      results: [],
-      notes: '',
-      attachments: []
-    })
-    setSelectedPatient(null)
+    
+    if (!selectedFile) {
+      setError('Please select a file to upload')
+      return
+    }
+
+    // Check file extension
+    const fileExtension = selectedFile.name.split('.').pop().toLowerCase()
+    
+    // For non-CSV files, patient selection is required
+    if (fileExtension !== 'csv' && (!selectedPatient || !selectedPatient.id)) {
+      setError('Please select a patient first for non-CSV files')
+      return
+    }
+    
+    // For CSV files, show info that patient_id should be in the file
+    if (fileExtension === 'csv') {
+      console.log('CSV file detected - patient_id must be included in the CSV file')
+    }
+    
+    try {
+      setSubmitting(true)
+      setError('')
+      
+      // Validate file
+      const validation = fileService.validateFile(selectedFile, ['text/csv', 'application/pdf', 'image/jpeg', 'image/png'])
+      if (!validation.isValid) {
+        setError(validation.errors.join(', '))
+        return
+      }
+      
+      console.log('Uploading lab file:', selectedFile.name, 
+        fileExtension === 'csv' ? '(patient_id from CSV)' : `for patient: ${selectedPatient?.id}`)
+      
+      // Upload file using fileService
+      // For CSV files, patientId is not needed (it's in the file)
+      // For other files, patientId is required
+      const result = await fileService.uploadLabReports(
+        selectedFile, 
+        fileExtension === 'csv' ? null : selectedPatient?.id
+      )
+      
+      if (result.message || result.success !== false) {
+        console.log('File uploaded successfully:', result)
+        setShowUploadModal(false)
+        setSelectedFile(null)
+        setSelectedPatient(null)
+        
+        // Reload lab reports to show the new upload
+        await loadLabReports()
+        
+        // Show success message
+        alert(`Lab report "${selectedFile.name}" uploaded successfully!`)
+      } else {
+        setError('Failed to upload file')
+      }
+      
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      setError(error.message || 'Failed to upload file. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    try {
+      setSubmitting(true)
+      setError('')
+      
+      // Validate form data
+      const validation = labReportsService.validateLabReport(reportForm)
+      if (!validation.isValid) {
+        setError('Please fill in all required fields correctly')
+        console.error('Validation errors:', validation.errors)
+        return
+      }
+      
+      // Format data for API
+      const formattedData = labReportsService.formatLabReportForAPI(reportForm)
+      
+      console.log('Submitting lab report:', formattedData)
+      
+      // Submit to API
+      const response = await labReportsService.createLabReport(formattedData)
+      
+      if (response.success) {
+        console.log('Lab report created successfully:', response.report_id)
+        
+        // Reset form
+        setReportForm({
+          patientId: '',
+          testType: '',
+          testName: '',
+          orderDate: '',
+          collectionDate: '',
+          resultDate: new Date().toISOString().slice(0, 10),
+          status: 'completed',
+          priority: 'normal',
+          results: [],
+          notes: '',
+          attachments: []
+        })
+        
+        setShowReportForm(false)
+        setSelectedPatient(null)
+        
+        // Reload lab reports if on reports tab
+        if (activeTab === 'reports') {
+          await loadLabReports()
+        }
+        
+        alert('Lab report saved successfully!')
+      } else {
+        setError(response.error || 'Failed to save lab report')
+      }
+      
+    } catch (error) {
+      console.error('Error submitting lab report:', error)
+      setError('Failed to save lab report. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const getStatusColor = (status) => {
@@ -381,18 +511,35 @@ const LabReports = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Patient ID (Optional)
+                    Patient ID (For non-CSV files only)
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter patient ID if known"
+                    placeholder="Enter patient ID for PDF/Image files"
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={selectedFile?.name?.toLowerCase().endsWith('.csv')}
                   />
+                  {selectedFile?.name?.toLowerCase().endsWith('.csv') && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Patient ID not needed for CSV files - it should be included in the CSV content
+                    </p>
+                  )}
                 </div>
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
                   <p className="text-sm text-yellow-800">
-                    <strong>Note:</strong> Files will be processed and results will be extracted automatically. Manual verification may be required.
+                    <strong>Note:</strong> 
+                    {selectedFile?.name?.toLowerCase().endsWith('.csv') ? (
+                      <>
+                        CSV files must include patient_id as a mandatory column. 
+                        Required columns: patient_id, test_type, test_name, collection_date, result_date.
+                        Optional: parameter, value, unit, normal_range, result_status, notes.
+                      </>
+                    ) : (
+                      <>
+                        Files will be processed and results will be extracted automatically. Manual verification may be required.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -540,81 +687,106 @@ const LabReports = () => {
 
       {activeTab === 'reports' && (
         <div className="space-y-4">
-          {labReports.map((report) => (
-            <Card key={report.id}>
-              <Card.Content className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">{report.testName}</h3>
-                    <p className="text-gray-600">{report.patientName} ({report.patientId})</p>
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-                      <div className="flex items-center">
-                        <CalendarIcon className="h-4 w-4 mr-1" />
-                        Collected: {report.collectionDate}
-                      </div>
-                      <div className="flex items-center">
-                        <ClockIcon className="h-4 w-4 mr-1" />
-                        Resulted: {report.resultDate}
+          {reportsLoading ? (
+            <div className="text-center py-8">
+              <div className="text-gray-500">Loading lab reports...</div>
+            </div>
+          ) : labReports.length === 0 ? (
+            <div className="text-center py-8">
+              <BeakerIcon className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <div className="text-gray-500">No lab reports found</div>
+              <Button 
+                className="mt-3"
+                onClick={() => setActiveTab('upload')}
+              >
+                Create First Report
+              </Button>
+            </div>
+          ) : (
+            labReports.map((report) => (
+              <Card key={report.id}>
+                <Card.Content className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">{report.test_name}</h3>
+                      <p className="text-gray-600">{report.patient_name} ({report.patient_id_display})</p>
+                      <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                        <div className="flex items-center">
+                          <CalendarIcon className="h-4 w-4 mr-1" />
+                          Collected: {labReportsService.formatDate(report.collection_date)}
+                        </div>
+                        <div className="flex items-center">
+                          <ClockIcon className="h-4 w-4 mr-1" />
+                          Resulted: {labReportsService.formatDate(report.result_date)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-col items-end space-y-2">
-                    <Badge variant={getStatusColor(report.status)}>
-                      {report.status}
-                    </Badge>
-                    <Badge variant={getPriorityColor(report.priority)}>
-                      {report.priority}
-                    </Badge>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Parameter</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Normal Range</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {report.results.map((result, index) => (
-                        <tr key={index}>
-                          <td className="px-4 py-2 text-sm font-medium text-gray-900">{result.parameter}</td>
-                          <td className="px-4 py-2 text-sm text-gray-900 font-medium">{result.value}</td>
-                          <td className="px-4 py-2 text-sm text-gray-500">{result.unit}</td>
-                          <td className="px-4 py-2 text-sm text-gray-500">{result.normalRange}</td>
-                          <td className="px-4 py-2">
-                            <Badge variant={getResultStatusColor(result.status)}>
-                              {result.status}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {report.criticalValues.length > 0 && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                    <div className="flex items-center">
-                      <ExclamationTriangleIcon className="h-4 w-4 text-red-500 mr-2" />
-                      <span className="text-sm font-medium text-red-800">Critical Values:</span>
-                      <span className="text-sm text-red-700 ml-2">
-                        {report.criticalValues.join(', ')}
-                      </span>
+                    <div className="flex flex-col items-end space-y-2">
+                      <Badge variant={labReportsService.getStatusColor(report.status)}>
+                        {report.status}
+                      </Badge>
+                      <Badge variant={labReportsService.getPriorityColor(report.priority)}>
+                        {report.priority}
+                      </Badge>
                     </div>
                   </div>
-                )}
 
-                <div className="mt-4 text-sm text-gray-500">
-                  Reported by: {report.reportedBy}
-                </div>
-              </Card.Content>
-            </Card>
-          ))}
+                  {report.test_results && report.test_results.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Parameter</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Result</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Normal Range</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {report.test_results.map((result, index) => (
+                            <tr key={index}>
+                              <td className="px-4 py-2 text-sm font-medium text-gray-900">{result.parameter}</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 font-medium">{result.value}</td>
+                              <td className="px-4 py-2 text-sm text-gray-500">{result.unit}</td>
+                              <td className="px-4 py-2 text-sm text-gray-500">{result.normalRange || result.normal_range}</td>
+                              <td className="px-4 py-2">
+                                <Badge variant={labReportsService.getResultStatusColor(result.status)}>
+                                  {result.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {labReportsService.hasCriticalResults(report.test_results) && (
+                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex items-center">
+                        <ExclamationTriangleIcon className="h-4 w-4 text-red-500 mr-2" />
+                        <span className="text-sm font-medium text-red-800">Critical Values:</span>
+                        <span className="text-sm text-red-700 ml-2">
+                          {labReportsService.getCriticalParameters(report.test_results).join(', ')}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {report.notes && (
+                    <div className="mt-4 text-sm text-gray-600">
+                      <strong>Notes:</strong> {report.notes}
+                    </div>
+                  )}
+
+                  <div className="mt-4 text-sm text-gray-500">
+                    Created: {labReportsService.formatDateTime(report.created_at)}
+                  </div>
+                </Card.Content>
+              </Card>
+            ))
+          )}
         </div>
       )}
 
@@ -844,6 +1016,13 @@ const LabReports = () => {
                 />
               </div>
 
+              {/* Error display */}
+              {error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <div className="text-sm text-red-600">{error}</div>
+                </div>
+              )}
+
               {/* File Upload */}
               <div className="mt-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Attachments</label>
@@ -862,13 +1041,19 @@ const LabReports = () => {
                   onClick={() => {
                     setShowReportForm(false)
                     setSelectedPatient(null)
+                    setError('')
                   }}
+                  disabled={submitting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="inline-flex items-center">
+                <Button 
+                  type="submit" 
+                  className="inline-flex items-center"
+                  disabled={submitting}
+                >
                   <CheckCircleIcon className="h-4 w-4 mr-2" />
-                  Save Lab Report
+                  {submitting ? 'Saving...' : 'Save Lab Report'}
                 </Button>
               </div>
             </form>
